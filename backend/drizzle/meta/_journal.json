@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1747900800000,
+      "tag": "0000_postgres_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1750032000000,
+      "tag": "0010_posturaweb_phase1",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750636800000,
+      "tag": "0011_posturaweb_phase2",
+      "breakpoints": true
+    }
+  ]
+}
