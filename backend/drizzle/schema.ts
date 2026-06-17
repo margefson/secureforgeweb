@@ -123,6 +123,7 @@ export const notifications = pgTable("notifications", {
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
   incidentId: integer("incidentId"),
+  findingId: integer("findingId"),
   isRead: boolean("isRead").default(false).notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
@@ -149,6 +150,7 @@ export const applications = pgTable("applications", {
   userId: integer("userId").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   baseUrl: varchar("baseUrl", { length: 500 }),
+  repositoryUrl: varchar("repositoryUrl", { length: 500 }),
   description: text("description"),
   techStack: varchar("techStack", { length: 255 }),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
@@ -254,3 +256,64 @@ export const checklistResponses = pgTable("checklist_responses", {
 });
 export type ChecklistResponse = typeof checklistResponses.$inferSelect;
 export type InsertChecklistResponse = typeof checklistResponses.$inferInsert;
+
+// ─── PosturaWeb: Findings (Fase 3) ───────────────────────────────────────────
+export const findingStatusEnum = pgEnum("finding_status", [
+  "aberto",
+  "em_correcao",
+  "resolvido",
+  "aceito_risco",
+]);
+
+export const priorityEnum = pgEnum("priority", [
+  "imediata",
+  "curto_prazo",
+  "medio_prazo",
+  "baixa",
+]);
+
+export const findingHistoryActionEnum = pgEnum("finding_history_action", [
+  "status_changed",
+  "notes_updated",
+  "severity_changed",
+  "created",
+]);
+
+export const findings = pgTable("findings", {
+  id: serial("id").primaryKey(),
+  analysisId: integer("analysisId").notNull(),
+  itemId: integer("itemId"),
+  userId: integer("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  severity: severityEnum("severity").default("medium").notNull(),
+  priority: priorityEnum("priority").default("medio_prazo").notNull(),
+  status: findingStatusEnum("status").default("aberto").notNull(),
+  evidence: text("evidence"),
+  notes: text("notes"),
+  recommendationTitle: varchar("recommendationTitle", { length: 255 }),
+  recommendationDescription: text("recommendationDescription"),
+  recommendationAction: text("recommendationAction"),
+  recommendationReference: varchar("recommendationReference", { length: 255 }),
+  resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+export type Finding = typeof findings.$inferSelect;
+export type InsertFinding = typeof findings.$inferInsert;
+
+export const findingHistory = pgTable("finding_history", {
+  id: serial("id").primaryKey(),
+  findingId: integer("findingId").notNull(),
+  userId: integer("userId").notNull(),
+  action: findingHistoryActionEnum("action").notNull(),
+  fromValue: varchar("fromValue", { length: 255 }),
+  toValue: varchar("toValue", { length: 255 }),
+  comment: text("comment"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+});
+export type FindingHistory = typeof findingHistory.$inferSelect;
+export type InsertFindingHistory = typeof findingHistory.$inferInsert;

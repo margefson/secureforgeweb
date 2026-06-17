@@ -3,8 +3,28 @@
 **Disciplina:** Projeto Integrador — Desenvolvimento de Ferramentas de Segurança Aplicada  
 **Trilha:** 1 — AppHardener  
 **Projeto base de referência:** [incident_security_system](https://github.com/margefson/incident_security_system) (Projeto 1)  
-**Versão:** 1.0  
-**Data:** 15/06/2026
+**Versão:** 1.1  
+**Data:** 16/06/2026
+
+---
+
+## Estado atual do sistema (referência rápida)
+
+> Este guia documenta o **cronograma histórico** de implementação. Para o **estado operacional atual**, consulte [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md) e [MANUAL.md](MANUAL.md).
+
+| Capacidade | Status |
+|---|---|
+| Cadastro de aplicações (URL e/ou repo Git) | Concluído |
+| Checklist OWASP v1.0 (24 itens) | Concluído |
+| Wizard com salvamento parcial | Concluído |
+| Análises automáticas (HTTP, Git, IA) | Concluído |
+| Assistente IA por categoria e por item | Concluído |
+| Achados, dashboard, PDF | Concluído |
+| Admin (usuários, checklist) | Concluído |
+
+**Comandos:** `pnpm db:setup` · `pnpm dev` · `pnpm test` · `pnpm check`
+
+**Demonstração:** [DEMO.md](DEMO.md)
 
 ---
 
@@ -366,6 +386,8 @@ incident_security_system  →  fork  →  posturaweb
 
 **Critério de aceite:** Achado criado manualmente ou a partir de item não conforme; recomendação exibida; status atualizável com histórico.
 
+> **Status Fase 3:** Concluída em 16/06/2026. Tabelas `findings` e `finding_history`, router `findings.*`, geração automática ao concluir análise, telas `/applications/:id/findings` e `/findings/:id`.
+
 ---
 
 ### Fase 4 — Dashboard e relatório (Semanas 8–9)
@@ -384,6 +406,8 @@ incident_security_system  →  fork  →  posturaweb
 
 **Critério de aceite:** Dashboard exibe score de postura; PDF exportável com resumo executivo e recomendações priorizadas.
 
+> **Status Fase 4:** Concluída em 16/06/2026. Endpoints `analyses.dashboard`, `analyses.globalDashboard`, `reports.exportPdf`, telas `/dashboard`, `/applications/:id/dashboard`, gráficos Recharts e PDF de postura.
+
 ---
 
 ### Fase 5 — Refinamento, segurança e entrega final (Semanas 10–12)
@@ -401,6 +425,8 @@ incident_security_system  →  fork  →  posturaweb
 | 5.7 | Apresentação final + vídeo demo | Slides / gravação |
 
 **Critério de aceite:** Protótipo demonstrável ponta a ponta; documentação completa; testes passando.
+
+> **Status Fase 5:** Concluída em 16/06/2026. `security.test.ts` adaptado, admin checklist, notificações de achados críticos, `MANUAL.md`, `DEMO.md`, `APRESENTACAO.md`, limpeza de docs legados.
 
 ---
 

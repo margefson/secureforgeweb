@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ShieldAlert, Users } from "lucide-react";
+import { ShieldAlert, Users, ListChecks } from "lucide-react";
 
 export default function Admin() {
   const [, navigate] = useLocation();
@@ -27,6 +27,13 @@ export default function Admin() {
       desc: "Gerenciar usuários e papéis do sistema",
       path: "/admin/users",
       color: "text-purple-400 bg-purple-400/10 border-purple-400/20",
+    },
+    {
+      icon: ListChecks,
+      label: "Checklist OWASP",
+      desc: "Visualizar e ajustar severidade sugerida dos itens",
+      path: "/admin/checklist-items",
+      color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
     },
   ];
 

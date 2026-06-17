@@ -84,13 +84,28 @@ export const createApplicationSchema = Joi.object({
     "string.uri": "URL base inválida (use http:// ou https://)",
     "string.max": "URL deve ter no máximo 500 caracteres",
   }),
+  repositoryUrl: Joi.string().max(500).allow("", null).optional().messages({
+    "string.max": "URL do repositório deve ter no máximo 500 caracteres",
+  }),
   description: Joi.string().max(5000).allow("", null).optional(),
   techStack: Joi.string().max(255).allow("", null).optional(),
+}).custom((value, helpers) => {
+  const baseUrl = typeof value.baseUrl === "string" ? value.baseUrl.trim() : "";
+  const repositoryUrl =
+    typeof value.repositoryUrl === "string" ? value.repositoryUrl.trim() : "";
+  if (!baseUrl && !repositoryUrl) {
+    return helpers.error("application.urlsRequired");
+  }
+  return value;
+}).messages({
+  "application.urlsRequired":
+    "Informe a URL base ou o repositório Git — pelo menos um é necessário para análises automáticas.",
 });
 
 export const updateApplicationSchema = Joi.object({
   name: Joi.string().min(2).max(255).optional(),
   baseUrl: Joi.string().uri({ allowRelative: false }).max(500).allow("", null).optional(),
+  repositoryUrl: Joi.string().max(500).allow("", null).optional(),
   description: Joi.string().max(5000).allow("", null).optional(),
   techStack: Joi.string().max(255).allow("", null).optional(),
 }).min(1);
@@ -117,6 +132,57 @@ export const saveResponsesSchema = Joi.object({
 export const createAnalysisSchema = Joi.object({
   applicationId: Joi.number().integer().positive().required(),
   title: Joi.string().min(2).max(255).optional(),
+});
+
+// ─── Finding Schemas ─────────────────────────────────────────────────────────
+const SEVERITY_VALUES = ["critical", "high", "medium", "low"] as const;
+const PRIORITY_VALUES = ["imediata", "curto_prazo", "medio_prazo", "baixa"] as const;
+const FINDING_STATUS_VALUES = ["aberto", "em_correcao", "resolvido", "aceito_risco"] as const;
+
+export const createFindingSchema = Joi.object({
+  analysisId: Joi.number().integer().positive().required(),
+  itemId: Joi.number().integer().positive().optional().allow(null),
+  title: Joi.string().min(3).max(255).required().messages({
+    "string.min": "Título deve ter pelo menos 3 caracteres",
+    "any.required": "Título é obrigatório",
+  }),
+  description: Joi.string().max(5000).allow("", null).optional(),
+  severity: Joi.string()
+    .valid(...SEVERITY_VALUES)
+    .optional(),
+  priority: Joi.string()
+    .valid(...PRIORITY_VALUES)
+    .optional(),
+  evidence: Joi.string().max(5000).allow("", null).optional(),
+});
+
+export const updateFindingSchema = Joi.object({
+  title: Joi.string().min(3).max(255).optional(),
+  description: Joi.string().max(5000).allow("", null).optional(),
+  severity: Joi.string()
+    .valid(...SEVERITY_VALUES)
+    .optional(),
+  evidence: Joi.string().max(5000).allow("", null).optional(),
+  notes: Joi.string().max(5000).allow("", null).optional(),
+}).min(1);
+
+export const updateFindingStatusSchema = Joi.object({
+  status: Joi.string()
+    .valid(...FINDING_STATUS_VALUES)
+    .required()
+    .messages({ "any.only": "Status inválido" }),
+  comment: Joi.string().max(2000).allow("", null).optional(),
+});
+
+export const listFindingsSchema = Joi.object({
+  applicationId: Joi.number().integer().positive().required(),
+  severity: Joi.string()
+    .valid(...SEVERITY_VALUES)
+    .optional(),
+  status: Joi.string()
+    .valid(...FINDING_STATUS_VALUES)
+    .optional(),
+  categoryId: Joi.number().integer().positive().optional(),
 });
 
 // ─── Incident Schemas ──────────────────────────────────────────────────────

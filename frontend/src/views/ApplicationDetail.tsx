@@ -8,9 +8,13 @@ import { Button } from "@/components/ui/button";
 
 import { Badge } from "@/components/ui/badge";
 
-import { ArrowLeft, ExternalLink, ClipboardList, Globe, Play, History } from "lucide-react";
-
+import { ArrowLeft, ExternalLink, ClipboardList, Globe, Play, History, AlertTriangle, BarChart2, GitBranch, Pencil, Download } from "lucide-react";
+import { downloadPdfBase64 } from "@/components/PostureMetricsPanel";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useState } from "react";
 import { toast } from "sonner";
+import { hasDuplicateGitUrlProtocols, sanitizeGitRepositoryUrlInput } from "@/lib/gitRepositoryUrl";
 
 
 
@@ -60,6 +64,12 @@ export default function ApplicationDetail() {
 
   const id = Number(params?.id);
 
+  const [editUrls, setEditUrls] = useState(false);
+
+  const [baseUrlDraft, setBaseUrlDraft] = useState("");
+
+  const [repositoryUrlDraft, setRepositoryUrlDraft] = useState("");
+
 
 
   const { data: app, isLoading } = trpc.applications.getById.useQuery(
@@ -80,7 +90,17 @@ export default function ApplicationDetail() {
 
   );
 
+  const { data: findingStats } = trpc.findings.stats.useQuery(
 
+    { applicationId: id },
+
+    { enabled: Number.isFinite(id) && id > 0 }
+
+  );
+
+
+
+  const utils = trpc.useUtils();
 
   const createAnalysis = trpc.analyses.create.useMutation({
 
@@ -91,6 +111,36 @@ export default function ApplicationDetail() {
       toast.success("Análise iniciada!");
 
       navigate(`/analyses/${analysis.id}/checklist`);
+
+    },
+
+    onError: (e) => toast.error(e.message),
+
+  });
+
+  const updateApp = trpc.applications.update.useMutation({
+
+    onSuccess: () => {
+
+      toast.success("Aplicação atualizada.");
+
+      setEditUrls(false);
+
+      utils.applications.getById.invalidate({ id });
+
+    },
+
+    onError: (e) => toast.error(e.message),
+
+  });
+
+  const exportPdf = trpc.reports.exportPdf.useMutation({
+
+    onSuccess: (result) => {
+
+      downloadPdfBase64(result.base64, result.filename);
+
+      toast.success(`Relatório exportado (${result.findingCount} achado(s))`);
 
     },
 
@@ -176,29 +226,171 @@ export default function ApplicationDetail() {
 
 
 
-        <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
 
-          <div className="flex items-center gap-2 text-sm font-mono text-foreground">
+          <div className="flex items-center justify-between gap-2">
 
-            <Globe className="w-4 h-4 text-primary" />
+            <div className="flex items-center gap-2 text-sm font-mono text-foreground">
 
-            Detalhes da aplicação
+              <Globe className="w-4 h-4 text-primary" />
+
+              Detalhes da aplicação
+
+            </div>
+
+            <Button
+
+              type="button"
+
+              variant="ghost"
+
+              size="sm"
+
+              className="font-mono text-xs"
+
+              onClick={() => {
+
+                setBaseUrlDraft(app.baseUrl ?? "");
+
+                setRepositoryUrlDraft(app.repositoryUrl ?? "");
+
+                setEditUrls((v) => !v);
+
+              }}
+
+            >
+
+              <Pencil className="w-3.5 h-3.5 mr-1" />
+
+              {editUrls ? "Cancelar" : "Editar URLs"}
+
+            </Button>
 
           </div>
 
-          {app.baseUrl && (
 
-            <p className="text-sm font-mono">
 
-              <span className="text-muted-foreground">URL: </span>
+          {editUrls ? (
 
-              <a href={app.baseUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+            <div className="space-y-3 border-t border-border/50 pt-3">
 
-                {app.baseUrl} <ExternalLink className="w-3 h-3" />
+              <div>
 
-              </a>
+                <Label className="text-xs font-mono">URL base</Label>
 
-            </p>
+                <Input
+
+                  className="mt-1 font-mono text-sm"
+
+                  value={baseUrlDraft}
+
+                  onChange={(e) => setBaseUrlDraft(e.target.value)}
+
+                  placeholder="https://app.exemplo.com"
+
+                />
+
+              </div>
+
+              <div>
+
+                <Label className="text-xs font-mono">Repositório Git</Label>
+
+                <Input
+
+                  className="mt-1 font-mono text-sm"
+
+                  value={repositoryUrlDraft}
+
+                  onChange={(e) => setRepositoryUrlDraft(e.target.value)}
+
+                  placeholder="https://github.com/org/projeto"
+
+                />
+
+              </div>
+
+              <Button
+
+                type="button"
+
+                size="sm"
+
+                className="font-mono text-xs"
+
+                disabled={updateApp.isPending}
+
+                onClick={() => {
+                  let repo = repositoryUrlDraft.trim() || null;
+                  if (repo && hasDuplicateGitUrlProtocols(repo)) {
+                    repo = sanitizeGitRepositoryUrlInput(repo);
+                    setRepositoryUrlDraft(repo);
+                    toast.message("URL do repositório corrigida — havia endereço duplicado no campo.");
+                  }
+                  updateApp.mutate({
+                    id,
+                    baseUrl: baseUrlDraft.trim() || null,
+                    repositoryUrl: repo,
+                  });
+                }}
+
+              >
+
+                {updateApp.isPending ? "Salvando..." : "Salvar URLs"}
+
+              </Button>
+
+            </div>
+
+          ) : (
+
+            <>
+
+              {app.baseUrl && (
+
+                <p className="text-sm font-mono">
+
+                  <span className="text-muted-foreground">URL: </span>
+
+                  <a href={app.baseUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+
+                    {app.baseUrl} <ExternalLink className="w-3 h-3" />
+
+                  </a>
+
+                </p>
+
+              )}
+
+              {app.repositoryUrl && (
+
+                <p className="text-sm font-mono">
+
+                  <span className="text-muted-foreground">Repositório: </span>
+
+                  <a href={app.repositoryUrl.replace(/\.git$/, "")} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+
+                    <GitBranch className="w-3 h-3" />
+
+                    {app.repositoryUrl} <ExternalLink className="w-3 h-3" />
+
+                  </a>
+
+                </p>
+
+              )}
+
+              {!app.baseUrl && !app.repositoryUrl && (
+
+                <p className="text-sm text-muted-foreground">
+
+                  Cadastre URL base e/ou repositório Git para habilitar análises automáticas.
+
+                </p>
+
+              )}
+
+            </>
 
           )}
 
@@ -267,6 +459,104 @@ export default function ApplicationDetail() {
             </Button>
 
           )}
+
+        </div>
+
+
+
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 flex items-center justify-between gap-4">
+
+          <div>
+
+            <p className="text-sm font-mono font-semibold text-foreground flex items-center gap-2">
+
+              <BarChart2 className="w-4 h-4 text-primary" />
+
+              Dashboard de postura
+
+            </p>
+
+            <p className="text-xs text-muted-foreground mt-1">
+
+              Score de conformidade, gráficos por severidade e exportação de relatório PDF.
+
+            </p>
+
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+
+            <Button
+
+              variant="outline"
+
+              className="font-mono text-xs shrink-0"
+
+              onClick={() => navigate(`/applications/${id}/dashboard`)}
+
+            >
+
+              Ver dashboard
+
+            </Button>
+
+            <Button
+
+              variant="outline"
+
+              className="font-mono text-xs shrink-0"
+
+              onClick={() => exportPdf.mutate({ applicationId: id })}
+
+              disabled={exportPdf.isPending}
+
+            >
+
+              <Download className="w-3.5 h-3.5 mr-1" />
+
+              {exportPdf.isPending ? "Gerando PDF..." : "Exportar PDF"}
+
+            </Button>
+
+          </div>
+
+        </div>
+
+
+
+        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-5 flex items-center justify-between gap-4">
+
+          <div>
+
+            <p className="text-sm font-mono font-semibold text-foreground flex items-center gap-2">
+
+              <AlertTriangle className="w-4 h-4 text-orange-400" />
+
+              Achados de segurança
+
+            </p>
+
+            <p className="text-xs text-muted-foreground mt-1">
+
+              {findingStats?.total ?? 0} achado(s) registrado(s). Revise severidade, recomendações e status de correção.
+
+            </p>
+
+          </div>
+
+          <Button
+
+            variant="outline"
+
+            className="font-mono text-xs shrink-0"
+
+            onClick={() => navigate(`/applications/${id}/findings`)}
+
+          >
+
+            Ver achados
+
+          </Button>
 
         </div>
 

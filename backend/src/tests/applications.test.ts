@@ -75,6 +75,31 @@ describe("applications router", () => {
     await expect(caller.applications.create({ name: "A" })).rejects.toThrow(TRPCError);
   });
 
+  it("create exige URL base ou repositório Git", async () => {
+    const caller = appRouter.createCaller(makeCtx(mockUser));
+    await expect(
+      caller.applications.create({ name: "Portal Web", description: "Sem URLs" })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("URL base ou o repositório Git"),
+    });
+    expect(applicationsDb.createApplication).not.toHaveBeenCalled();
+  });
+
+  it("create aceita apenas repositório Git", async () => {
+    vi.mocked(applicationsDb.createApplication).mockResolvedValue({
+      ...mockApp,
+      baseUrl: null,
+      repositoryUrl: "https://github.com/example/app.git",
+    });
+    const caller = appRouter.createCaller(makeCtx(mockUser));
+    await caller.applications.create({
+      name: "Portal Web",
+      repositoryUrl: "https://github.com/example/app.git",
+    });
+    expect(applicationsDb.createApplication).toHaveBeenCalled();
+  });
+
   it("list retorna aplicações do usuário", async () => {
     vi.mocked(applicationsDb.getApplicationsByUser).mockResolvedValue([mockApp]);
     const caller = appRouter.createCaller(makeCtx(mockUser));

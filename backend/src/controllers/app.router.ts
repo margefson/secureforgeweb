@@ -22,8 +22,14 @@ import {
   countUnreadNotifications,
 } from "../models/db.js";
 import { sendPasswordResetEmail } from "../services/email.js";
+import { HTTP_ASSESSMENT_ITEM_CODES, runHttpHeaderAssessment } from "../services/checklistAssessor.js";
+import { GIT_ASSESSMENT_ITEM_CODES, runGitRepositoryAssessment, sanitizeGitRepositoryUrlInput } from "../services/gitRepoAssessor.js";
+import {
+  AI_ORCHESTRATED_ITEM_CODES,
+  runAiAgentAssessment,
+} from "../services/aiChecklistAssessor.js";
 import crypto from "crypto";
-import { registerSchema, loginSchema, createApplicationSchema, updateApplicationSchema, createAnalysisSchema, saveResponsesSchema, validateJoi } from "../lib/validation.js";
+import { registerSchema, loginSchema, createApplicationSchema, updateApplicationSchema, createAnalysisSchema, saveResponsesSchema, createFindingSchema, updateFindingSchema, updateFindingStatusSchema, listFindingsSchema, validateJoi, isPasswordValid } from "../lib/validation.js";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { sdk } from "../_core/sdk.js";
@@ -35,7 +41,7 @@ import {
   deleteApplication,
   countApplicationsByUser,
 } from "../models/applications.db.js";
-import { getChecklistCatalog } from "../models/checklist.db.js";
+import { getChecklistCatalog, updateChecklistItemById } from "../models/checklist.db.js";
 import {
   createAnalysis,
   getAnalysisById,
@@ -44,6 +50,23 @@ import {
   saveAnalysisResponses,
   completeAnalysis,
 } from "../models/analyses.db.js";
+import {
+  createFinding,
+  getFindingById,
+  getFindingsByApplication,
+  getFindingHistory,
+  updateFinding,
+  updateFindingStatus,
+  generateFindingsFromAnalysis,
+  countFindingsByApplication,
+  priorityFromSeverity,
+} from "../models/findings.db.js";
+import {
+  getApplicationDashboard,
+  getGlobalDashboard,
+  getPostureReportData,
+} from "../models/dashboard.db.js";
+import { generatePosturePdfBuffer } from "../services/pdf.js";
 
 async function assertApplicationAccess(applicationId: number, userId: number, isAdmin: boolean) {
   const app = await getApplicationById(applicationId);
@@ -60,6 +83,14 @@ async function assertAnalysisAccess(analysisId: number, userId: number, isAdmin:
   }
   await assertApplicationAccess(analysis.applicationId, userId, isAdmin);
   return analysis;
+}
+
+async function assertFindingAccess(findingId: number, userId: number, isAdmin: boolean) {
+  const finding = await getFindingById(findingId);
+  if (!finding || (!isAdmin && finding.userId !== userId)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Achado não encontrado" });
+  }
+  return finding;
 }
 
 const authRouter = router({
@@ -146,8 +177,14 @@ const authRouter = router({
     }),
 
   confirmPasswordReset: publicProcedure
-    .input(z.object({ token: z.string(), newPassword: z.string().min(8) }))
+    .input(z.object({ token: z.string(), newPassword: z.string() }))
     .mutation(async ({ input }) => {
+      if (!isPasswordValid(input.newPassword)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A senha não atende aos requisitos de segurança (mín. 8 caracteres, maiúscula, minúscula, número e caractere especial).",
+        });
+      }
       const record = await getPasswordResetToken(input.token);
       if (!record) throw new TRPCError({ code: "BAD_REQUEST", message: "Token inválido" });
       if (record.usedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Token já utilizado" });
@@ -168,8 +205,14 @@ const authRouter = router({
   }),
 
   changePassword: protectedProcedure
-    .input(z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }))
+    .input(z.object({ currentPassword: z.string(), newPassword: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      if (!isPasswordValid(input.newPassword)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A nova senha não atende aos requisitos de segurança (mín. 8 caracteres, maiúscula, minúscula, número e caractere especial).",
+        });
+      }
       const user = await getUserByEmail(ctx.user.email ?? "");
       if (!user || !user.passwordHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui senha local" });
@@ -250,6 +293,29 @@ const adminRouter = router({
       await resetUserPassword(input.userId, hash);
       return { success: true };
     }),
+
+  listChecklistItems: adminProcedure.query(async () => getChecklistCatalog()),
+
+  updateChecklistItem: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        title: z.string().min(3).max(255).optional(),
+        description: z.string().min(10).max(5000).optional(),
+        suggestedSeverity: z.enum(["critical", "high", "medium", "low"]).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      if (Object.keys(data).length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum campo para atualizar" });
+      }
+      const updated = await updateChecklistItemById(id, data);
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Item de checklist não encontrado" });
+      }
+      return updated;
+    }),
 });
 
 const notificationsRouter = router({
@@ -273,24 +339,36 @@ const applicationsRouter = router({
       z.object({
         name: z.string(),
         baseUrl: z.string().optional().nullable(),
+        repositoryUrl: z.string().optional().nullable(),
         description: z.string().optional().nullable(),
         techStack: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const validated = validateJoi<{
-        name: string;
-        baseUrl?: string | null;
-        description?: string | null;
-        techStack?: string | null;
-      }>(createApplicationSchema, input);
-      return createApplication({
-        userId: ctx.user.id,
-        name: validated.name,
-        baseUrl: validated.baseUrl || null,
-        description: validated.description || null,
-        techStack: validated.techStack || null,
-      });
+      try {
+        const validated = validateJoi<{
+          name: string;
+          baseUrl?: string | null;
+          repositoryUrl?: string | null;
+          description?: string | null;
+          techStack?: string | null;
+        }>(createApplicationSchema, input);
+        return createApplication({
+          userId: ctx.user.id,
+          name: validated.name,
+          baseUrl: validated.baseUrl || null,
+          repositoryUrl: validated.repositoryUrl
+            ? sanitizeGitRepositoryUrlInput(validated.repositoryUrl)
+            : null,
+          description: validated.description || null,
+          techStack: validated.techStack || null,
+        });
+      } catch (err) {
+        if (err instanceof Error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        }
+        throw err;
+      }
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => getApplicationsByUser(ctx.user.id)),
@@ -307,6 +385,7 @@ const applicationsRouter = router({
         id: z.number(),
         name: z.string().optional(),
         baseUrl: z.string().optional().nullable(),
+        repositoryUrl: z.string().optional().nullable(),
         description: z.string().optional().nullable(),
         techStack: z.string().optional().nullable(),
       })
@@ -317,12 +396,17 @@ const applicationsRouter = router({
       const validated = validateJoi<{
         name?: string;
         baseUrl?: string | null;
+        repositoryUrl?: string | null;
         description?: string | null;
         techStack?: string | null;
       }>(updateApplicationSchema, rest);
       const updated = await updateApplication(id, ctx.user.id, {
         name: validated.name,
         baseUrl: validated.baseUrl ?? undefined,
+        repositoryUrl:
+          validated.repositoryUrl != null && validated.repositoryUrl !== ""
+            ? sanitizeGitRepositoryUrlInput(validated.repositoryUrl)
+            : validated.repositoryUrl ?? undefined,
         description: validated.description ?? undefined,
         techStack: validated.techStack ?? undefined,
       });
@@ -399,6 +483,145 @@ const analysesRouter = router({
       return state;
     }),
 
+  runAutoAssessment: protectedProcedure
+    .input(
+      z.object({
+        analysisId: z.number(),
+        scope: z.enum(["http_headers", "git_repo", "ai_agent"]).default("http_headers"),
+        itemIds: z.array(z.number()).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const analysis = await assertAnalysisAccess(input.analysisId, ctx.user.id, ctx.user.role === "admin");
+      if (analysis.status === "concluida") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Análise já concluída — não é possível executar nova avaliação automática.",
+        });
+      }
+
+      const application = await getApplicationById(analysis.applicationId);
+      if (!application) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Aplicação não encontrada" });
+      }
+
+      const state = await getAnalysisWizardState(input.analysisId);
+      if (!state) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Análise não encontrada" });
+      }
+
+      const itemIdFilter = input.itemIds?.length ? new Set(input.itemIds) : null;
+      const targetItems = itemIdFilter
+        ? state.items.filter((item) => itemIdFilter.has(item.id))
+        : state.items;
+
+      if (itemIdFilter && targetItems.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhum item válido selecionado para esta avaliação.",
+        });
+      }
+
+      const itemInputs = targetItems.map((item) => ({ id: item.id, code: item.code }));
+
+      try {
+        if (input.scope === "http_headers") {
+          if (!application.baseUrl?.trim()) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Cadastre a URL base da aplicação antes de executar a análise HTTP (editar aplicação → URL base).",
+            });
+          }
+
+          const { snapshot, suggestions } = await runHttpHeaderAssessment(application.baseUrl, itemInputs);
+
+          return {
+            scope: input.scope,
+            assessedUrl: snapshot.finalUrl,
+            requestedUrl: snapshot.requestedUrl,
+            statusCode: snapshot.statusCode,
+            assessedAt: new Date().toISOString(),
+            supportedItemCodes: [...HTTP_ASSESSMENT_ITEM_CODES],
+            suggestions,
+          };
+        }
+
+        if (input.scope === "git_repo") {
+          if (!application.repositoryUrl?.trim()) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Cadastre a URL do repositório Git antes de executar a análise de código (editar aplicação → Repositório Git).",
+            });
+          }
+
+          const { snapshot, suggestions } = await runGitRepositoryAssessment(
+            application.repositoryUrl,
+            itemInputs
+          );
+
+          return {
+            scope: input.scope,
+            repositoryUrl: snapshot.repositoryUrl,
+            cloneUrl: snapshot.cloneUrl,
+            filesScanned: snapshot.filesScanned,
+            assessedAt: new Date().toISOString(),
+            supportedItemCodes: [...GIT_ASSESSMENT_ITEM_CODES],
+            suggestions,
+          };
+        }
+
+        if (input.scope === "ai_agent") {
+          if (!application.baseUrl?.trim() && !application.repositoryUrl?.trim()) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Cadastre URL base e/ou repositório Git para o assistente IA.",
+            });
+          }
+
+          const aiItemInputs = targetItems.map((item) => ({
+            id: item.id,
+            code: item.code,
+            title: item.title,
+            description: item.description,
+          }));
+
+          const { context, result: aiResult } = await runAiAgentAssessment({
+            name: application.name,
+            baseUrl: application.baseUrl,
+            repositoryUrl: application.repositoryUrl,
+            techStack: application.techStack,
+            description: application.description,
+            items: aiItemInputs,
+          });
+
+          return {
+            scope: input.scope,
+            assessmentMode: aiResult.mode,
+            provider: aiResult.provider,
+            contextSummary: aiResult.contextSummary,
+            httpAssessed: Boolean(context.httpSnapshot),
+            repositoryAssessed: Boolean(context.gitSnapshot),
+            filesScanned: context.gitSnapshot?.filesScanned ?? 0,
+            npmAudit: context.npmAuditSummary,
+            assessedAt: new Date().toISOString(),
+            supportedItemCodes: [...AI_ORCHESTRATED_ITEM_CODES],
+            suggestions: aiResult.suggestions,
+          };
+        }
+
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Escopo de avaliação não suportado" });
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "Falha na avaliação automática",
+        });
+      }
+    }),
+
   saveResponses: protectedProcedure
     .input(
       z.object({
@@ -453,9 +676,226 @@ const analysesRouter = router({
       if (analysis.status === "concluida") {
         return { success: true, alreadyCompleted: true };
       }
-      await completeAnalysis(input.id);
+      await completeAnalysis(input.id, ctx.user.id);
       return { success: true, alreadyCompleted: false };
+    }),
+
+  dashboard: protectedProcedure
+    .input(z.object({ applicationId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertApplicationAccess(input.applicationId, ctx.user.id, ctx.user.role === "admin");
+      const data = await getApplicationDashboard(input.applicationId);
+      if (!data) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Aplicação não encontrada" });
+      }
+      return data;
+    }),
+
+  globalDashboard: protectedProcedure.query(async ({ ctx }) => {
+    return getGlobalDashboard(ctx.user.id);
+  }),
+});
+
+const findingsRouter = router({
+  create: protectedProcedure
+    .input(
+      z.object({
+        analysisId: z.number(),
+        itemId: z.number().optional().nullable(),
+        title: z.string(),
+        description: z.string().optional().nullable(),
+        severity: z.enum(["critical", "high", "medium", "low"]).optional(),
+        priority: z.enum(["imediata", "curto_prazo", "medio_prazo", "baixa"]).optional(),
+        evidence: z.string().optional().nullable(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const analysis = await assertAnalysisAccess(input.analysisId, ctx.user.id, ctx.user.role === "admin");
+      try {
+        const validated = validateJoi<{
+          analysisId: number;
+          itemId?: number | null;
+          title: string;
+          description?: string | null;
+          severity?: "critical" | "high" | "medium" | "low";
+          priority?: "imediata" | "curto_prazo" | "medio_prazo" | "baixa";
+          evidence?: string | null;
+        }>(createFindingSchema, input);
+
+        const severity = validated.severity ?? "medium";
+        return createFinding(
+          {
+            analysisId: validated.analysisId,
+            itemId: validated.itemId ?? null,
+            userId: analysis.userId,
+            title: validated.title,
+            description: validated.description || null,
+            severity,
+            priority: validated.priority ?? priorityFromSeverity(severity),
+            evidence: validated.evidence || null,
+          },
+          ctx.user.id
+        );
+      } catch (err) {
+        if (err instanceof Error && !err.message.includes("inválid")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        }
+        throw err;
+      }
+    }),
+
+  generateFromAnalysis: protectedProcedure
+    .input(z.object({ analysisId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertAnalysisAccess(input.analysisId, ctx.user.id, ctx.user.role === "admin");
+      return generateFindingsFromAnalysis(input.analysisId, ctx.user.id);
+    }),
+
+  listByApplication: protectedProcedure
+    .input(
+      z.object({
+        applicationId: z.number(),
+        severity: z.enum(["critical", "high", "medium", "low"]).optional(),
+        status: z.enum(["aberto", "em_correcao", "resolvido", "aceito_risco"]).optional(),
+        categoryId: z.number().optional(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      await assertApplicationAccess(input.applicationId, ctx.user.id, ctx.user.role === "admin");
+      validateJoi(listFindingsSchema, input);
+      const rows = await getFindingsByApplication(input.applicationId, {
+        severity: input.severity,
+        status: input.status,
+        categoryId: input.categoryId,
+      });
+      if (ctx.user.role !== "admin") {
+        return rows.filter((r) => r.userId === ctx.user.id);
+      }
+      return rows;
+    }),
+
+  stats: protectedProcedure
+    .input(z.object({ applicationId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertApplicationAccess(input.applicationId, ctx.user.id, ctx.user.role === "admin");
+      const total = await countFindingsByApplication(input.applicationId);
+      return { total };
+    }),
+
+  getById: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      return assertFindingAccess(input.id, ctx.user.id, ctx.user.role === "admin");
+    }),
+
+  getHistory: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertFindingAccess(input.id, ctx.user.id, ctx.user.role === "admin");
+      return getFindingHistory(input.id);
+    }),
+
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional().nullable(),
+        severity: z.enum(["critical", "high", "medium", "low"]).optional(),
+        evidence: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertFindingAccess(input.id, ctx.user.id, ctx.user.role === "admin");
+      const { id, ...rest } = input;
+      const validated = validateJoi<{
+        title?: string;
+        description?: string | null;
+        severity?: "critical" | "high" | "medium" | "low";
+        evidence?: string | null;
+        notes?: string | null;
+      }>(updateFindingSchema, rest);
+      const updated = await updateFinding(id, ctx.user.id, validated);
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Achado não encontrado" });
+      }
+      return updated;
+    }),
+
+  updateStatus: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        status: z.enum(["aberto", "em_correcao", "resolvido", "aceito_risco"]),
+        comment: z.string().optional().nullable(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertFindingAccess(input.id, ctx.user.id, ctx.user.role === "admin");
+      const validated = validateJoi<{ status: "aberto" | "em_correcao" | "resolvido" | "aceito_risco"; comment?: string | null }>(
+        updateFindingStatusSchema,
+        { status: input.status, comment: input.comment }
+      );
+      const updated = await updateFindingStatus(
+        input.id,
+        ctx.user.id,
+        validated.status,
+        validated.comment
+      );
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Achado não encontrado" });
+      }
+      return updated;
     }),
 });
 
-export { authRouter, adminRouter, notificationsRouter, applicationsRouter, checklistRouter, analysesRouter };
+const reportsRouter = router({
+  exportPdf: protectedProcedure
+    .input(
+      z.object({
+        applicationId: z.number(),
+        analysisId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertApplicationAccess(input.applicationId, ctx.user.id, ctx.user.role === "admin");
+      const report = await getPostureReportData(input.applicationId, input.analysisId);
+      if (!report) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Aplicação não encontrada" });
+      }
+
+      const { dashboard, findings, analysisTitle, analysisCompletedAt } = report;
+      const buffer = await generatePosturePdfBuffer({
+        applicationName: dashboard.application.name,
+        applicationUrl: dashboard.application.baseUrl,
+        techStack: dashboard.application.techStack,
+        userName: ctx.user.name ?? "Usuário",
+        userEmail: ctx.user.email ?? "",
+        analysisTitle,
+        analysisCompletedAt,
+        postureScore: dashboard.postureScore,
+        totalFindings: dashboard.totalFindings,
+        openFindings: dashboard.openFindings,
+        resolutionRate: dashboard.resolutionRate,
+        findingsBySeverity: dashboard.findingsBySeverity,
+        findings,
+      });
+
+      const slug = dashboard.application.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      const date = new Date().toISOString().slice(0, 10);
+
+      return {
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf" as const,
+        filename: `postura-${slug}-${date}.pdf`,
+        findingCount: findings.length,
+        postureScore: dashboard.postureScore,
+      };
+    }),
+});
+
+export { authRouter, adminRouter, notificationsRouter, applicationsRouter, checklistRouter, analysesRouter, findingsRouter, reportsRouter };

@@ -48,6 +48,11 @@ export default function NotificationBell() {
     if (!notif.isRead) {
       markRead.mutate({ id: notif.id });
     }
+    if (notif.findingId) {
+      navigate(`/findings/${notif.findingId}`);
+      setOpen(false);
+      return;
+    }
     if (notif.incidentId) {
       navigate(`/incidents/${notif.incidentId}`);
       setOpen(false);

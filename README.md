@@ -8,14 +8,20 @@ Projeto da Trilha 1 — AppHardener (Projeto Integrador: Segurança Aplicada).
 
 ![SecureForge Web](frontend/public/logo.png)
 
-## Status atual: Fase 2
+## Status atual
+
+Protótipo **funcional e demonstrável** — Entrega 2 concluída (16/06/2026):
 
 - PostgreSQL como banco principal (Drizzle ORM)
 - Autenticação (registro, login, perfil, admin de usuários)
-- **Cadastro de aplicações web** (CRUD completo)
+- **Cadastro de aplicações web** (CRUD — URL base e/ou repositório Git)
 - **Checklist OWASP v1.0** (24 itens em 9 categorias, com seed)
-- **Análise guiada** com wizard por categoria e sugestão de achados
-- Dashboard com contadores de aplicações e itens do checklist
+- **Análise guiada** com wizard por categoria, salvamento parcial e geração automática de achados
+- **Análises automáticas assistidas:** headers HTTP, repositório Git e assistente IA (por categoria e por item)
+- **Achados de segurança** com severidade, recomendações, status e histórico
+- **Dashboard de postura** com score, gráficos e taxa de resolução
+- **Relatório PDF** exportável (dashboard global, detalhe e dashboard da aplicação)
+- **Admin:** gestão de itens do checklist e notificações para achados críticos
 
 Identidade visual: [docs/BRAND.md](docs/BRAND.md)
 
@@ -31,6 +37,8 @@ Identidade visual: [docs/BRAND.md](docs/BRAND.md)
 | Git | qualquer | `git --version` |
 
 **Opcional:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) para subir o PostgreSQL sem instalação local.
+
+**Opcional (assistente IA com LLM):** chave `OPENAI_API_KEY` no `.env` — sem ela, o assistente usa heurísticas locais.
 
 ---
 
@@ -132,8 +140,10 @@ O health check deve retornar:
 
 1. Acesse http://localhost:5173
 2. Crie uma conta e faça login
-3. Cadastre uma aplicação em **Aplicações → Nova Aplicação**
+3. Cadastre uma aplicação em **Aplicações → Nova Aplicação** (informe URL base **e/ou** repositório Git)
 4. Inicie uma **análise de segurança** e percorra o wizard de checklist
+5. Use as **análises automáticas** por categoria ou por item; revise e salve as respostas
+6. Conclua a análise, gerencie achados e exporte o **relatório PDF**
 
 ---
 
@@ -151,10 +161,17 @@ O health check deve retornar:
 
 ## Documentação do projeto
 
-- [PROJETO_ARQUITETURAL.md](docs/PROJETO_ARQUITETURAL.md) — Arquitetura alvo
-- [GUIA_IMPLEMENTACAO.md](docs/GUIA_IMPLEMENTACAO.md) — Fases, cronograma e reaproveitamento
-- [RELATORIO_ENTREGA_1.md](docs/RELATORIO_ENTREGA_1.md) — Primeira entrega acadêmica
-- [BRAND.md](docs/BRAND.md) — Logo, ícone e identidade visual
+| Documento | Conteúdo |
+|---|---|
+| [docs/MANUAL.md](docs/MANUAL.md) | Manual de uso |
+| [docs/DEMO.md](docs/DEMO.md) | Roteiro de demonstração |
+| [docs/APRESENTACAO.md](docs/APRESENTACAO.md) | Roteiro de slides |
+| [docs/RELATORIO_ENTREGA_2.md](docs/RELATORIO_ENTREGA_2.md) | Relatório da Entrega 2 (estado atual) |
+| [docs/PROJETO_ARQUITETURAL.md](docs/PROJETO_ARQUITETURAL.md) | Arquitetura alvo |
+| [docs/GUIA_IMPLEMENTACAO.md](docs/GUIA_IMPLEMENTACAO.md) | Cronograma e reaproveitamento |
+| [docs/BRAND.md](docs/BRAND.md) | Logo e identidade visual |
+
+Índice completo: [docs/README.md](docs/README.md)
 
 ## Stack
 

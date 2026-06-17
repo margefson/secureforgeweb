@@ -41,7 +41,17 @@ vi.mock("../_core/notification", () => ({
   notifyOwner: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock("../models/applications.db.js", () => ({
+  getApplicationById: vi.fn(),
+}));
+
+vi.mock("../models/findings.db.js", () => ({
+  getFindingById: vi.fn(),
+}));
+
 import * as db from "../models/db";
+import * as applicationsDb from "../models/applications.db.js";
+import * as findingsDb from "../models/findings.db.js";
 
 // ─── Helper: create a tRPC context ─────────────────────────────────────────
 type AuthUser = NonNullable<TrpcContext["user"]>;
@@ -241,85 +251,97 @@ describe("6.3 Sessão Segura (Cookie)", () => {
 // 6.4 — Autorização IDOR (retornar 404, nunca 403)
 // ═══════════════════════════════════════════════════════════════════════════
 describe("6.4 Proteção IDOR (NOT_FOUND, nunca FORBIDDEN)", () => {
-  it("getById retorna NOT_FOUND quando incidente não existe", async () => {
-    vi.mocked(db.getIncidentById).mockResolvedValueOnce(undefined);
+  it("applications.getById retorna NOT_FOUND quando aplicação não existe", async () => {
+    vi.mocked(applicationsDb.getApplicationById).mockResolvedValueOnce(undefined);
     const caller = appRouter.createCaller(makeCtx({ id: 1 }));
-    await expect(caller.incidents.getById({ id: 9999 })).rejects.toMatchObject({
+    await expect(caller.applications.getById({ id: 9999 })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
-  it("getById retorna NOT_FOUND (não FORBIDDEN) quando incidente pertence a outro usuário", async () => {
-    vi.mocked(db.getIncidentById).mockResolvedValueOnce({
+  it("applications.getById retorna NOT_FOUND (não FORBIDDEN) quando aplicação pertence a outro usuário", async () => {
+    vi.mocked(applicationsDb.getApplicationById).mockResolvedValueOnce({
       id: 42,
-      userId: 999, // different user
-      title: "Outro incidente",
-      description: "desc",
-      category: "phishing",
-      riskLevel: "high",
-      confidence: 0.9,
+      userId: 999,
+      name: "Outra app",
+      baseUrl: null,
+      description: null,
+      techStack: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     const caller = appRouter.createCaller(makeCtx({ id: 1, role: "user" }));
-    await expect(caller.incidents.getById({ id: 42 })).rejects.toMatchObject({
-      code: "NOT_FOUND", // Must be NOT_FOUND, not FORBIDDEN
+    await expect(caller.applications.getById({ id: 42 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
     });
   });
 
-  it("getById NÃO retorna FORBIDDEN para incidente de outro usuário", async () => {
-    vi.mocked(db.getIncidentById).mockResolvedValueOnce({
+  it("applications.getById NÃO retorna FORBIDDEN para aplicação de outro usuário", async () => {
+    vi.mocked(applicationsDb.getApplicationById).mockResolvedValueOnce({
       id: 42,
       userId: 999,
-      title: "Outro incidente",
-      description: "desc",
-      category: "phishing",
-      riskLevel: "high",
-      confidence: 0.9,
+      name: "Outra app",
+      baseUrl: null,
+      description: null,
+      techStack: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     const caller = appRouter.createCaller(makeCtx({ id: 1, role: "user" }));
     try {
-      await caller.incidents.getById({ id: 42 });
+      await caller.applications.getById({ id: 42 });
       expect.fail("Should have thrown");
     } catch (err: unknown) {
       expect((err as { code: string }).code).not.toBe("FORBIDDEN");
     }
   });
 
-  it("delete retorna NOT_FOUND (não FORBIDDEN) quando incidente pertence a outro usuário", async () => {
-    vi.mocked(db.getIncidentById).mockResolvedValueOnce({
-      id: 42,
+  it("findings.getById retorna NOT_FOUND (não FORBIDDEN) quando achado pertence a outro usuário", async () => {
+    vi.mocked(findingsDb.getFindingById).mockResolvedValueOnce({
+      id: 10,
       userId: 999,
-      title: "Outro incidente",
-      description: "desc",
-      category: "phishing",
-      riskLevel: "high",
-      confidence: 0.9,
+      analysisId: 5,
+      itemId: 1,
+      title: "Achado alheio",
+      description: null,
+      severity: "high",
+      priority: "curto_prazo",
+      status: "aberto",
+      evidence: null,
+      notes: null,
+      recommendationTitle: null,
+      recommendationDescription: null,
+      recommendationAction: null,
+      recommendationReference: null,
+      resolvedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      applicationId: 1,
+      analysisTitle: "Análise",
+      itemCode: "AUTH-01",
+      itemTitle: "Senha",
+      categoryId: 1,
+      categoryName: "Autenticação",
     });
     const caller = appRouter.createCaller(makeCtx({ id: 1, role: "user" }));
-    await expect(caller.incidents.delete({ id: 42 })).rejects.toMatchObject({
+    await expect(caller.findings.getById({ id: 10 })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
-  it("admin pode acessar incidente de qualquer usuário", async () => {
-    vi.mocked(db.getIncidentById).mockResolvedValueOnce({
+  it("admin pode acessar aplicação de qualquer usuário", async () => {
+    vi.mocked(applicationsDb.getApplicationById).mockResolvedValueOnce({
       id: 42,
       userId: 999,
-      title: "Incidente de outro usuário",
-      description: "desc",
-      category: "phishing",
-      riskLevel: "high",
-      confidence: 0.9,
+      name: "App de outro usuário",
+      baseUrl: null,
+      description: null,
+      techStack: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     const caller = appRouter.createCaller(makeCtx({ id: 1, role: "admin" }));
-    const result = await caller.incidents.getById({ id: 42 });
+    const result = await caller.applications.getById({ id: 42 });
     expect(result.id).toBe(42);
   });
 });

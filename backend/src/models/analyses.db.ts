@@ -9,6 +9,8 @@ import {
   ChecklistResponse,
 } from "../../drizzle/schema.js";
 import { getActiveChecklist, listChecklistCategories, listChecklistItems } from "./checklist.db.js";
+import { deleteFindingsByAnalysisIds } from "./findings.db.js";
+import { getApplicationById } from "./applications.db.js";
 import type { ChecklistItemWithCategory } from "./checklist.db.js";
 
 export type ComplianceValue = "conforme" | "parcial" | "nao_conforme" | "nao_aplicavel";
@@ -203,7 +205,7 @@ export async function upsertChecklistResponses(
   return saved;
 }
 
-export async function completeAnalysis(analysisId: number): Promise<Analysis | undefined> {
+export async function completeAnalysis(analysisId: number, userId?: number): Promise<Analysis | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -217,6 +219,11 @@ export async function completeAnalysis(analysisId: number): Promise<Analysis | u
     .where(eq(analyses.id, analysisId))
     .returning();
 
+  if (row && userId) {
+    const { generateFindingsFromAnalysis } = await import("./findings.db.js");
+    await generateFindingsFromAnalysis(analysisId, userId);
+  }
+
   return row;
 }
 
@@ -224,10 +231,11 @@ export async function getAnalysisWizardState(analysisId: number) {
   const analysis = await getAnalysisById(analysisId);
   if (!analysis) return null;
 
-  const [categories, items, responses] = await Promise.all([
+  const [categories, items, responses, application] = await Promise.all([
     listChecklistCategories(),
     listChecklistItems(analysis.checklistId),
     getResponsesByAnalysis(analysisId),
+    getApplicationById(analysis.applicationId),
   ]);
 
   const responseMap = Object.fromEntries(
@@ -248,6 +256,15 @@ export async function getAnalysisWizardState(analysisId: number) {
 
   return {
     analysis,
+    application: application
+      ? {
+          id: application.id,
+          name: application.name,
+          baseUrl: application.baseUrl,
+          repositoryUrl: application.repositoryUrl,
+          techStack: application.techStack,
+        }
+      : null,
     categories: categoriesWithItems,
     items,
     responses: responseMap,
@@ -302,6 +319,7 @@ export async function deleteAnalysesByApplication(applicationId: number): Promis
   const ids = analysisRows.map((r) => r.id);
   if (ids.length === 0) return;
 
+  await deleteFindingsByAnalysisIds(ids);
   await db.delete(checklistResponses).where(inArray(checklistResponses.analysisId, ids));
   await db.delete(analyses).where(eq(analyses.applicationId, applicationId));
 }

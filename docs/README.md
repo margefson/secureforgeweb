@@ -1,35 +1,36 @@
-# Documentação — INCIDENT_SYS
+# Documentação — SecureForge Web
 
-Índice oficial da documentação do projeto. Cada pasta cobre **um público e um objetivo**; evite duplicar conteúdo entre elas.
+Índice da documentação do projeto **SecureForge Web** (Trilha 1 — AppHardener).
 
-| Pasta | Público | Conteúdo |
-|-------|---------|----------|
-| [manual-usuario/](manual-usuario/) | Usuários finais, analistas, admins da UI | Como usar o sistema (telas, fluxos, erros) |
-| [guia-wazuh/](guia-wazuh/) | Infra / SOC | Instalação do Wazuh SIEM e integração com o ISS |
-| [arquitetura-deploy/](arquitetura-deploy/) | Desenvolvedores, DevOps | MVC, banco, deploy, diagramas, troubleshooting técnico |
-| [relatorio-tecnico/](relatorio-tecnico/) | Acadêmico / auditoria | Relatório completo do projeto (escopo, testes, decisões) |
-| [apresentacao/](apresentacao/) | Apresentações | Slides HTML, PPTX e roteiro |
-| [interno/](interno/) | Equipe de desenvolvimento | TODO do projeto |
+| Documento | Público | Conteúdo |
+|---|---|---|
+| [MANUAL.md](MANUAL.md) | Usuários | Como usar o sistema (telas e fluxos) |
+| [DEMO.md](DEMO.md) | Apresentação | Roteiro de demonstração ao vivo |
+| [APRESENTACAO.md](APRESENTACAO.md) | Banca / slides | Roteiro de apresentação final |
+| [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md) | Acadêmico | Relatório da Entrega 2 — estado atual do sistema |
+| [RELATORIO_ENTREGA.md](RELATORIO_ENTREGA.md) | Acadêmico | Relatório da Entrega 1 (planejamento, 15/06/2026) |
+| [GUIA_IMPLEMENTACAO.md](GUIA_IMPLEMENTACAO.md) | Desenvolvedores | Cronograma, fases e reaproveitamento |
+| [PROJETO_ARQUITETURAL.md](PROJETO_ARQUITETURAL.md) | Acadêmico | Arquitetura alvo e requisitos |
+| [BRAND.md](BRAND.md) | Design | Identidade visual e logo |
 
 ## Início rápido
 
-- **Usar o sistema** → [manual-usuario/MANUAL_USUARIO.md](manual-usuario/MANUAL_USUARIO.md)
-- **Subir o projeto localmente** → [README.md](../README.md) na raiz + [arquitetura-deploy/DEPLOYMENT.md](arquitetura-deploy/DEPLOYMENT.md)
-- **Integrar Wazuh** → [guia-wazuh/GUIA_INSTALACAO_WAZUH.md](guia-wazuh/GUIA_INSTALACAO_WAZUH.md)
-- **Entender a estrutura do código** → [arquitetura-deploy/ARQUITETURA.md](arquitetura-deploy/ARQUITETURA.md)
+- **Usar o sistema** → [MANUAL.md](MANUAL.md)
+- **Subir localmente** → [README.md](../README.md) na raiz do repositório
+- **Demonstrar na banca** → [DEMO.md](DEMO.md) + [APRESENTACAO.md](APRESENTACAO.md)
+- **Entender a implementação** → [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md) + [GUIA_IMPLEMENTACAO.md](GUIA_IMPLEMENTACAO.md)
 
-## O que foi unificado
+## Status do projeto
 
-| Antes (redundante) | Agora |
-|--------------------|--------|
-| `manual_implantacao.md` (MySQL, paths antigos) | Removido — use [DEPLOYMENT](arquitetura-deploy/DEPLOYMENT.md) + [ARQUITETURA](arquitetura-deploy/ARQUITETURA.md) |
-| Vários `.md` soltos na raiz de `docs/` | Pastas por tema + este índice |
-| `ARQUITETURA_MVC.md` + `DEPLOYMENT.md` + `DATABASE_POSTGRES.md` | Pasta [arquitetura-deploy/](arquitetura-deploy/) |
+**Entrega 2 concluída** (16/06/2026): base funcional mínima da Trilha 1 implementada e operacional.
 
-## Gerar DOCX do guia Wazuh
+| Capacidade | Status |
+|---|---|
+| Cadastro de aplicações (URL e/ou repo Git) | Concluído |
+| Checklist OWASP (24 itens / 9 categorias) | Concluído |
+| Wizard com salvamento parcial e navegação livre | Concluído |
+| Análises automáticas (HTTP, Git, assistente IA) | Concluído |
+| Assistente IA por categoria e por item | Concluído |
+| Achados, dashboard, PDF | Concluído |
 
-```powershell
-python backend/scripts/build_wazuh_docx.py
-```
-
-Saída: `docs/guia-wazuh/GUIA_INSTALACAO_WAZUH.docx`
+Detalhes técnicos e evidências: [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md)

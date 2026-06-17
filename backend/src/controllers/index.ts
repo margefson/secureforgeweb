@@ -10,6 +10,8 @@ import {
   applicationsRouter,
   checklistRouter,
   analysesRouter,
+  findingsRouter,
+  reportsRouter,
 } from "./app.router.js";
 
 export const appRouter = router({
@@ -20,6 +22,8 @@ export const appRouter = router({
   applications: applicationsRouter,
   checklist: checklistRouter,
   analyses: analysesRouter,
+  findings: findingsRouter,
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

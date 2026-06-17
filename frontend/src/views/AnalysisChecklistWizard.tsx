@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useLocation, useRoute } from "wouter";
 
@@ -34,11 +34,46 @@ import {
 
   Loader2,
 
+  Sparkles,
+
+  GitBranch,
+
+  Brain,
+
 } from "lucide-react";
 
 
 
 type Compliance = "conforme" | "parcial" | "nao_conforme" | "nao_aplicavel";
+
+type AutoSuggestionMeta = {
+  confidence: number;
+  evidence: string;
+  rationale: string;
+  source?: "auto" | "ai";
+};
+
+type AssessmentScope = "http_headers" | "git_repo" | "ai_agent";
+
+type PendingAssessment = { scope: AssessmentScope; itemIds: number[] } | null;
+
+const HTTP_ITEM_CODES = new Set(["HEADER-01", "HEADER-02", "HEADER-03", "HEADER-04", "DATA-01"]);
+
+const GIT_ITEM_CODES = new Set([
+  "AUTH-01", "AUTH-02", "AUTH-03", "AUTH-04",
+  "AUTHZ-01", "AUTHZ-02", "AUTHZ-03",
+  "INPUT-01", "INPUT-02", "INPUT-03",
+  "SECRET-01", "SECRET-02", "ERROR-01", "ERROR-02",
+]);
+
+function getScopeItemIds(
+  items: { id: number; code: string }[],
+  scope: AssessmentScope
+): number[] {
+  if (scope === "ai_agent") return items.map((i) => i.id);
+  const codeSet = scope === "http_headers" ? HTTP_ITEM_CODES : GIT_ITEM_CODES;
+  return items.filter((i) => codeSet.has(i.code)).map((i) => i.id);
+}
 
 
 
@@ -100,9 +135,17 @@ export default function AnalysisChecklistWizard() {
 
   const [localResponses, setLocalResponses] = useState<Record<number, LocalResponse>>({});
 
+  const [autoMeta, setAutoMeta] = useState<Record<number, AutoSuggestionMeta>>({});
+
   const [showSummary, setShowSummary] = useState(false);
 
   const [lastSuggestedCount, setLastSuggestedCount] = useState(0);
+
+  const [pendingAssessment, setPendingAssessment] = useState<PendingAssessment>(null);
+
+  const hydratedRef = useRef(false);
+
+  const silentSaveRef = useRef(false);
 
 
 
@@ -116,27 +159,55 @@ export default function AnalysisChecklistWizard() {
 
     if (!wizard) return;
 
-    const initial: Record<number, LocalResponse> = {};
+    setLocalResponses((prev) => {
 
-    for (const item of wizard.items) {
+      const next = { ...prev };
 
-      const saved = wizard.responses[item.id];
+      for (const item of wizard.items) {
 
-      if (saved) {
+        const saved = wizard.responses[item.id];
 
-        initial[item.id] = {
+        if (saved && !prev[item.id]) {
 
-          compliance: saved.compliance as Compliance,
+          next[item.id] = {
 
-          notes: saved.notes ?? "",
+            compliance: saved.compliance as Compliance,
 
-        };
+            notes: saved.notes ?? "",
+
+          };
+
+        }
 
       }
 
-    }
+      if (!hydratedRef.current) {
 
-    setLocalResponses(initial);
+        for (const item of wizard.items) {
+
+          const saved = wizard.responses[item.id];
+
+          if (saved) {
+
+            next[item.id] = {
+
+              compliance: saved.compliance as Compliance,
+
+              notes: saved.notes ?? "",
+
+            };
+
+          }
+
+        }
+
+        hydratedRef.current = true;
+
+      }
+
+      return next;
+
+    });
 
     if (wizard.analysis.status === "concluida") setShowSummary(true);
 
@@ -152,7 +223,41 @@ export default function AnalysisChecklistWizard() {
 
       utils.analyses.getWizard.invalidate({ id: analysisId });
 
-      toast.success(`${result.savedCount} resposta(s) salva(s)`);
+      if (!silentSaveRef.current) {
+
+        toast.success(`${result.savedCount} resposta(s) salva(s)`);
+
+      }
+
+      silentSaveRef.current = false;
+
+    },
+
+    onError: (e) => {
+
+      silentSaveRef.current = false;
+
+      toast.error(e.message);
+
+    },
+
+  });
+
+
+
+  const completeMutation = trpc.analyses.complete.useMutation({
+
+    onSuccess: async () => {
+
+      utils.analyses.getWizard.invalidate({ id: analysisId });
+
+      toast.success("Análise concluída! Achados gerados automaticamente.");
+
+      if (wizard?.analysis.applicationId) {
+
+        navigate(`/applications/${wizard.analysis.applicationId}/findings`);
+
+      }
 
     },
 
@@ -162,20 +267,84 @@ export default function AnalysisChecklistWizard() {
 
 
 
-  const completeMutation = trpc.analyses.complete.useMutation({
+  const applyAutoSuggestions = useCallback(
+    (
+      result: {
+        scope: AssessmentScope;
+        suggestions: Array<{
+          itemId: number;
+          compliance: string;
+          confidence: number;
+          evidence: string;
+          rationale: string;
+          source?: "auto" | "ai";
+        }>;
+        assessmentMode?: string;
+        filesScanned?: number;
+        assessedUrl?: string;
+      },
+      itemCount: number
+    ) => {
+      const meta: Record<number, AutoSuggestionMeta> = {};
 
-    onSuccess: () => {
+      setLocalResponses((prev) => {
+        const next = { ...prev };
 
-      utils.analyses.getWizard.invalidate({ id: analysisId });
+        for (const suggestion of result.suggestions) {
+          const label =
+            suggestion.source === "ai"
+              ? "Assistente IA"
+              : result.scope === "git_repo"
+                ? "Análise Git"
+                : "Análise HTTP";
 
-      toast.success("Análise concluída com sucesso!");
+          next[suggestion.itemId] = {
+            compliance: suggestion.compliance as Compliance,
+            notes: `[${label} · ${suggestion.confidence}%]\n${suggestion.evidence}\n\n${suggestion.rationale}`,
+          };
 
-      if (wizard?.analysis.applicationId) {
+          meta[suggestion.itemId] = {
+            confidence: suggestion.confidence,
+            evidence: suggestion.evidence,
+            rationale: suggestion.rationale,
+            source: suggestion.source,
+          };
+        }
 
-        navigate(`/applications/${wizard.analysis.applicationId}`);
+        return next;
+      });
 
+      setAutoMeta((prev) => ({ ...prev, ...meta }));
+
+      if (result.suggestions.length === 0) {
+        toast.message("Nenhuma sugestão gerada para a seleção atual.");
+        return;
       }
 
+      const label =
+        result.scope === "ai_agent"
+          ? `${result.suggestions.length} sugestão(ões) IA (${itemCount === 1 ? "item" : `${itemCount} itens`})`
+          : result.scope === "git_repo"
+            ? `${result.suggestions.length} sugestão(ões) do repositório`
+            : `${result.suggestions.length} sugestão(ões) HTTP`;
+
+      toast.success(label);
+    },
+    []
+  );
+
+  const autoAssessMutation = trpc.analyses.runAutoAssessment.useMutation({
+
+    onMutate: (vars) =>
+      setPendingAssessment({
+        scope: vars.scope ?? "http_headers",
+        itemIds: vars.itemIds ?? [],
+      }),
+
+    onSettled: () => setPendingAssessment(null),
+
+    onSuccess: (result, vars) => {
+      applyAutoSuggestions(result, vars.itemIds?.length ?? result.suggestions.length);
     },
 
     onError: (e) => toast.error(e.message),
@@ -200,6 +369,22 @@ export default function AnalysisChecklistWizard() {
 
   function setItemResponse(itemId: number, patch: Partial<LocalResponse>) {
 
+    if (patch.compliance !== undefined || patch.notes !== undefined) {
+
+      setAutoMeta((prev) => {
+
+        if (!prev[itemId]) return prev;
+
+        const next = { ...prev };
+
+        delete next[itemId];
+
+        return next;
+
+      });
+
+    }
+
     setLocalResponses((prev) => ({
 
       ...prev,
@@ -212,9 +397,15 @@ export default function AnalysisChecklistWizard() {
 
 
 
-  async function saveCurrentCategory(andAdvance = true) {
+  async function saveCurrentCategory(options?: {
+    andAdvance?: boolean;
+    requireAll?: boolean;
+    silent?: boolean;
+  }) {
 
-    if (!currentCategory) return;
+    const { andAdvance = false, requireAll = false, silent = false } = options ?? {};
+
+    if (!currentCategory) return false;
 
     const responses = currentCategory.items
 
@@ -232,15 +423,27 @@ export default function AnalysisChecklistWizard() {
 
 
 
-    if (responses.length < currentCategory.items.length) {
+    if (responses.length === 0) {
 
-      toast.error("Responda todos os itens desta categoria antes de continuar.");
+      if (!silent) toast.error("Nenhuma resposta para salvar nesta categoria.");
 
-      return;
+      return false;
 
     }
 
 
+
+    if (requireAll && responses.length < currentCategory.items.length) {
+
+      toast.error("Responda todos os itens desta categoria antes de continuar.");
+
+      return false;
+
+    }
+
+
+
+    if (silent) silentSaveRef.current = true;
 
     await saveMutation.mutateAsync({ analysisId, responses });
 
@@ -259,6 +462,62 @@ export default function AnalysisChecklistWizard() {
       }
 
     }
+
+    return true;
+
+  }
+
+
+
+  async function switchCategory(idx: number) {
+
+    if (idx === categoryIndex) return;
+
+    await saveCurrentCategory({ silent: true });
+
+    setCategoryIndex(idx);
+
+  }
+
+
+
+  function runAssessment(scope: AssessmentScope, items: { id: number; code: string }[]) {
+
+    const itemIds = getScopeItemIds(items, scope);
+
+    if (itemIds.length === 0) {
+
+      const msg =
+        scope === "http_headers"
+          ? "Esta seleção não possui itens avaliáveis via headers HTTP."
+
+          : scope === "git_repo"
+            ? "Esta seleção não possui itens avaliáveis via repositório Git."
+
+            : "Nenhum item selecionado para o assistente IA.";
+
+      toast.error(msg);
+
+      return;
+
+    }
+
+    autoAssessMutation.mutate({ analysisId, scope, itemIds });
+
+  }
+
+
+
+  function isAssessmentPending(scope: AssessmentScope, itemIds: number[]) {
+
+    if (!pendingAssessment || pendingAssessment.scope !== scope) return false;
+
+    if (itemIds.length === 0) return pendingAssessment.itemIds.length === 0;
+
+    return (
+      itemIds.length === pendingAssessment.itemIds.length &&
+      itemIds.every((id) => pendingAssessment.itemIds.includes(id))
+    );
 
   }
 
@@ -300,9 +559,32 @@ export default function AnalysisChecklistWizard() {
 
 
 
-  const { analysis, progress } = wizard;
+  const { analysis, progress, application } = wizard;
 
   const isCompleted = analysis.status === "concluida";
+
+  const applicationBaseUrl = application?.baseUrl?.trim() ?? "";
+
+  const applicationRepositoryUrl = application?.repositoryUrl?.trim() ?? "";
+
+  const canRunHttpAssessment = Boolean(applicationBaseUrl) && !isCompleted;
+
+  const canRunGitAssessment = Boolean(applicationRepositoryUrl) && !isCompleted;
+
+  const canRunAiAssessment =
+    Boolean(applicationBaseUrl || applicationRepositoryUrl) && !isCompleted;
+
+  const currentCategoryHttpIds = currentCategory
+    ? getScopeItemIds(currentCategory.items, "http_headers")
+    : [];
+
+  const currentCategoryGitIds = currentCategory
+    ? getScopeItemIds(currentCategory.items, "git_repo")
+    : [];
+
+  const categoryAnsweredCount = currentCategory
+    ? currentCategory.items.filter((i) => localResponses[i.id]?.compliance).length
+    : 0;
 
 
 
@@ -320,7 +602,7 @@ export default function AnalysisChecklistWizard() {
 
       <DashboardLayout>
 
-        <div className="space-y-6 max-w-3xl">
+        <div className="space-y-6 max-w-5xl">
 
           <div className="flex items-center gap-3">
 
@@ -392,7 +674,7 @@ export default function AnalysisChecklistWizard() {
 
               <p className="text-xs text-muted-foreground">
 
-                Itens não conformes ou parciais gerarão achados na Fase 3. Revise abaixo:
+                Itens não conformes ou parciais geram achados ao concluir a análise. Revise abaixo:
 
               </p>
 
@@ -458,7 +740,7 @@ export default function AnalysisChecklistWizard() {
 
               >
 
-                {completeMutation.isPending ? "Concluindo..." : "Concluir análise"}
+                {completeMutation.isPending ? "Concluindo..." : "Concluir e gerar achados"}
 
               </Button>
 
@@ -494,7 +776,7 @@ export default function AnalysisChecklistWizard() {
 
     <DashboardLayout>
 
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 max-w-5xl">
 
         <div className="flex items-center gap-3">
 
@@ -544,15 +826,75 @@ export default function AnalysisChecklistWizard() {
 
 
 
+        {!isCompleted && (
+
+          <div className="rounded-xl border border-border bg-card/50 p-4 space-y-2">
+
+            {(!applicationBaseUrl || !applicationRepositoryUrl) && (
+
+              <div className="space-y-1 text-sm text-yellow-600 dark:text-yellow-400">
+
+                {!applicationBaseUrl && (
+
+                  <p className="flex items-start gap-2">
+
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+
+                    Cadastre a URL base da aplicação para análise automática de headers HTTP.
+
+                  </p>
+
+                )}
+
+                {!applicationRepositoryUrl && (
+
+                  <p className="flex items-start gap-2">
+
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+
+                    Cadastre a URL do repositório Git para análise estática de código.
+
+                  </p>
+
+                )}
+
+              </div>
+
+            )}
+
+            {(applicationBaseUrl || applicationRepositoryUrl) && (
+
+              <div className="text-xs font-mono text-muted-foreground space-y-1">
+
+                {applicationBaseUrl && <p>URL HTTP: {applicationBaseUrl}</p>}
+
+                {applicationRepositoryUrl && <p>Repositório: {applicationRepositoryUrl}</p>}
+
+                <p>Use os botões em cada categoria ou item para executar análises de forma independente. As respostas são salvas ao trocar de categoria ou ao clicar em Salvar.</p>
+
+              </div>
+
+            )}
+
+          </div>
+
+        )}
+
+
+
         <div className="flex flex-wrap gap-2">
 
-          {categories.map((cat, idx) => (
+          {categories.map((cat, idx) => {
+
+            const answered = cat.items.filter((i) => localResponses[i.id]?.compliance).length;
+
+            return (
 
             <button
 
               key={cat.id}
 
-              onClick={() => setCategoryIndex(idx)}
+              onClick={() => switchCategory(idx)}
 
               className={`text-xs font-mono px-3 py-1.5 rounded-lg border transition-colors ${
 
@@ -560,7 +902,7 @@ export default function AnalysisChecklistWizard() {
 
                   ? "bg-primary/10 border-primary/30 text-primary"
 
-                  : cat.answeredInCategory === cat.totalInCategory && cat.totalInCategory > 0
+                  : answered === cat.totalInCategory && cat.totalInCategory > 0
 
                     ? "border-emerald-400/30 text-emerald-400"
 
@@ -572,11 +914,13 @@ export default function AnalysisChecklistWizard() {
 
               {cat.name}
 
-              <span className="ml-1 opacity-70">({cat.answeredInCategory}/{cat.totalInCategory})</span>
+              <span className="ml-1 opacity-70">({answered}/{cat.totalInCategory})</span>
 
             </button>
 
-          ))}
+            );
+
+          })}
 
         </div>
 
@@ -586,17 +930,119 @@ export default function AnalysisChecklistWizard() {
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-5">
 
-            <div className="flex items-center gap-2 border-b border-border/50 pb-3">
+            <div className="flex flex-col gap-3 border-b border-border/50 pb-3">
 
-              <ClipboardList className="w-4 h-4 text-primary" />
+              <div className="flex items-center gap-2">
 
-              <h2 className="text-sm font-mono font-semibold text-foreground">{currentCategory.name}</h2>
+                <ClipboardList className="w-4 h-4 text-primary" />
 
-              <span className="text-xs text-muted-foreground font-mono ml-auto">
+                <h2 className="text-sm font-mono font-semibold text-foreground">{currentCategory.name}</h2>
 
-                Categoria {categoryIndex + 1} de {categories.length}
+                <span className="text-xs text-muted-foreground font-mono ml-auto">
 
-              </span>
+                  Categoria {categoryIndex + 1} de {categories.length} · {categoryAnsweredCount}/{currentCategory.items.length} respondidos
+
+                </span>
+
+              </div>
+
+              {!isCompleted && (
+
+                <div className="flex flex-wrap gap-2">
+
+                  {currentCategoryHttpIds.length > 0 && (
+
+                    <Button
+
+                      variant="outline"
+
+                      size="sm"
+
+                      className="font-mono text-xs h-8"
+
+                      disabled={!canRunHttpAssessment || autoAssessMutation.isPending}
+
+                      onClick={() => runAssessment("http_headers", currentCategory.items)}
+
+                    >
+
+                      {isAssessmentPending("http_headers", currentCategoryHttpIds) ? (
+
+                        <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Headers...</>
+
+                      ) : (
+
+                        <><Sparkles className="w-3.5 h-3.5 mr-1.5" /> Analisar headers HTTP</>
+
+                      )}
+
+                    </Button>
+
+                  )}
+
+                  {currentCategoryGitIds.length > 0 && (
+
+                    <Button
+
+                      variant="outline"
+
+                      size="sm"
+
+                      className="font-mono text-xs h-8"
+
+                      disabled={!canRunGitAssessment || autoAssessMutation.isPending}
+
+                      onClick={() => runAssessment("git_repo", currentCategory.items)}
+
+                    >
+
+                      {isAssessmentPending("git_repo", currentCategoryGitIds) ? (
+
+                        <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Repositório...</>
+
+                      ) : (
+
+                        <><GitBranch className="w-3.5 h-3.5 mr-1.5" /> Analisar repositório Git</>
+
+                      )}
+
+                    </Button>
+
+                  )}
+
+                  {canRunAiAssessment && (
+
+                    <Button
+
+                      variant="outline"
+
+                      size="sm"
+
+                      className="font-mono text-xs h-8"
+
+                      disabled={autoAssessMutation.isPending}
+
+                      onClick={() => runAssessment("ai_agent", currentCategory.items)}
+
+                    >
+
+                      {isAssessmentPending("ai_agent", currentCategory.items.map((i) => i.id)) ? (
+
+                        <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Assistente IA...</>
+
+                      ) : (
+
+                        <><Brain className="w-3.5 h-3.5 mr-1.5" /> Assistente IA (categoria)</>
+
+                      )}
+
+                    </Button>
+
+                  )}
+
+                </div>
+
+              )}
 
             </div>
 
@@ -608,7 +1054,7 @@ export default function AnalysisChecklistWizard() {
 
                 <div className="flex items-start justify-between gap-3">
 
-                  <div>
+                  <div className="flex-1 min-w-0">
 
                     <p className="text-sm font-mono text-foreground">
 
@@ -626,13 +1072,81 @@ export default function AnalysisChecklistWizard() {
 
                   </div>
 
-                  <Badge variant="outline" className={`font-mono text-xs shrink-0 ${SEVERITY_COLORS[item.suggestedSeverity] ?? ""}`}>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
 
-                    {item.suggestedSeverity}
+                    <Badge variant="outline" className={`font-mono text-xs ${SEVERITY_COLORS[item.suggestedSeverity] ?? ""}`}>
 
-                  </Badge>
+                      {item.suggestedSeverity}
+
+                    </Badge>
+
+                    {!isCompleted && canRunAiAssessment && (
+
+                      <Button
+
+                        variant="ghost"
+
+                        size="sm"
+
+                        className="font-mono text-xs h-7 px-2 text-violet-600 dark:text-violet-300 hover:text-violet-700 hover:bg-violet-500/10"
+
+                        disabled={autoAssessMutation.isPending}
+
+                        onClick={() => runAssessment("ai_agent", [item])}
+
+                      >
+
+                        {isAssessmentPending("ai_agent", [item.id]) ? (
+
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> IA...</>
+
+                        ) : (
+
+                          <><Brain className="w-3 h-3 mr-1" /> Assistente IA</>
+
+                        )}
+
+                      </Button>
+
+                    )}
+
+                  </div>
 
                 </div>
+
+
+
+                {autoMeta[item.id] && (
+
+                  <div className={`rounded-lg border p-3 space-y-1 ${autoMeta[item.id].source === "ai" ? "border-violet-500/25 bg-violet-500/5" : "border-cyan-500/25 bg-cyan-500/5"}`}>
+
+                    <p className={`text-xs font-mono flex items-center gap-1.5 ${autoMeta[item.id].source === "ai" ? "text-violet-700 dark:text-violet-300" : "text-cyan-700 dark:text-cyan-300"}`}>
+
+                      {autoMeta[item.id].source === "ai" ? (
+
+                        <><Brain className="w-3.5 h-3.5" /> Sugestão IA · {autoMeta[item.id].confidence}% confiança</>
+
+                      ) : (
+
+                        <><Sparkles className="w-3.5 h-3.5" /> Sugestão automática · {autoMeta[item.id].confidence}% confiança</>
+
+                      )}
+
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">{autoMeta[item.id].evidence}</p>
+
+                    <p className="text-xs text-muted-foreground/80 italic">{autoMeta[item.id].rationale}</p>
+
+                    <p className="text-[11px] text-muted-foreground/70">
+
+                      Revise e confirme antes de salvar — a sugestão não substitui validação humana.
+
+                    </p>
+
+                  </div>
+
+                )}
 
 
 
@@ -688,7 +1202,7 @@ export default function AnalysisChecklistWizard() {
 
 
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
 
           <Button
 
@@ -698,7 +1212,7 @@ export default function AnalysisChecklistWizard() {
 
             disabled={categoryIndex === 0}
 
-            onClick={() => setCategoryIndex((i) => i - 1)}
+            onClick={() => switchCategory(categoryIndex - 1)}
 
           >
 
@@ -708,31 +1222,61 @@ export default function AnalysisChecklistWizard() {
 
 
 
-          <Button
+          <div className="flex items-center gap-2">
 
-            className="font-mono text-xs"
+            <Button
 
-            onClick={() => saveCurrentCategory(true)}
+              variant="outline"
 
-            disabled={saveMutation.isPending || !categoryProgress.complete}
+              className="font-mono text-xs"
 
-          >
+              onClick={() => saveCurrentCategory()}
 
-            {saveMutation.isPending ? (
+              disabled={saveMutation.isPending || categoryAnsweredCount === 0}
 
-              <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Salvando...</>
+            >
 
-            ) : categoryIndex < categories.length - 1 ? (
+              {saveMutation.isPending ? (
 
-              <>Salvar e continuar <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+                <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Salvando...</>
 
-            ) : (
+              ) : (
 
-              <>Salvar e ver resumo <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+                "Salvar categoria"
 
-            )}
+              )}
 
-          </Button>
+            </Button>
+
+
+
+            <Button
+
+              className="font-mono text-xs"
+
+              onClick={() => saveCurrentCategory({ andAdvance: true, requireAll: true })}
+
+              disabled={saveMutation.isPending || !categoryProgress.complete}
+
+            >
+
+              {saveMutation.isPending ? (
+
+                <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Salvando...</>
+
+              ) : categoryIndex < categories.length - 1 ? (
+
+                <>Salvar e continuar <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+
+              ) : (
+
+                <>Salvar e ver resumo <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+
+              )}
+
+            </Button>
+
+          </div>
 
         </div>
 

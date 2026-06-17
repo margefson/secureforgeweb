@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
 import {
   LayoutDashboard, Shield, LogOut, User, ChevronRight,
-  Globe, ClipboardCheck, BarChart2, Users,
+  Globe, BarChart2, Users, ListChecks,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -17,6 +17,8 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import DashboardLayoutSkeleton from "./DashboardLayoutSkeleton";
+import NotificationBell from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";
 
 const menuItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +29,7 @@ const menuItems = [
 const adminItems = [
   { path: "/admin", label: "Painel Admin", icon: Shield },
   { path: "/admin/users", label: "Usuários", icon: Users },
+  { path: "/admin/checklist-items", label: "Checklist OWASP", icon: ListChecks },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -59,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     isActive={isActive}
                     onClick={() => setLocation(item.path)}
                     tooltip={item.label}
-                    className="h-9 transition-all font-mono text-xs"
+                    className="h-10 transition-all font-mono text-sm"
                   >
                     <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                     <span className={isActive ? "text-foreground font-medium" : "text-muted-foreground"}>{item.label}</span>
@@ -82,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         isActive={isActive}
                         onClick={() => setLocation(item.path)}
                         tooltip={item.label}
-                        className="h-9 transition-all font-mono text-xs"
+                        className="h-10 transition-all font-mono text-sm"
                       >
                         <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                         <span className={isActive ? "text-foreground font-medium" : "text-muted-foreground"}>{item.label}</span>
@@ -123,19 +126,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="bg-background">
-        <div className="flex border-b border-border h-12 items-center justify-between bg-background/95 px-4 backdrop-blur sticky top-0 z-40">
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+        <div className="flex border-b border-border h-14 items-center justify-between bg-background/95 px-4 lg:px-6 backdrop-blur sticky top-0 z-40">
+          <div className="flex items-center gap-2 text-sm font-mono text-muted-foreground">
             <Shield className="w-3.5 h-3.5 text-primary" />
             <span className="text-muted-foreground/50">PWEB</span>
             <ChevronRight className="w-3 h-3 text-muted-foreground/30" />
             <span className="text-foreground font-medium">{activeItem?.label ?? "Dashboard"}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-mono text-primary">
-            <ClipboardCheck className="w-3.5 h-3.5" />
-            <span>Fase 1</span>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <NotificationBell />
           </div>
         </div>
-        <main className="flex-1 p-5 max-w-screen-2xl">{children}</main>
+        <main className="flex-1 w-full p-6 lg:p-8">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

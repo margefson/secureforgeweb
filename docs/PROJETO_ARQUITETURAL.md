@@ -2,8 +2,10 @@
 
 **Disciplina:** Projeto Integrador — Desenvolvimento de Ferramentas de Segurança Aplicada  
 **Trilha:** 1 — AppHardener  
-**Versão:** 1.0  
-**Data:** 15/06/2026
+**Versão:** 1.1  
+**Data:** 16/06/2026
+
+> Para capacidades implementadas além do escopo original (análises automáticas assistidas), consulte [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md).
 
 ---
 
@@ -46,6 +48,7 @@ Desenvolver um protótipo funcional que permita:
 | Registro e classificação de achados | Suíte completa de pentest |
 | Recomendações de hardening | Substituição de ferramentas enterprise |
 | Dashboard e relatório simples | Análise automatizada profunda de código |
+| Análise assistida (headers HTTP, Git, IA) com revisão humana | Veredicto 100% automático sem analista |
 
 ### 1.5 Público-alvo
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Lock, Mail, Eye, EyeOff, Copy, ExternalLink, AlertTriangle } from "lucide-react";
 import { getLoginUrl } from "@/lib/const";
 
@@ -85,25 +86,39 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-stretch justify-center p-4 sm:p-6 lg:p-8">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-primary/3 rounded-full blur-3xl" />
       </div>
-      <div className="w-full max-w-md relative">
-        <div className="text-center mb-8 flex flex-col items-center gap-3">
-          <BrandLogo variant="icon" iconClassName="w-16 h-16 rounded-2xl" />
+      <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-8 lg:gap-12 items-center my-auto relative">
+        <div className="hidden lg:flex flex-col gap-4 pr-4">
+          <BrandLogo variant="icon" iconClassName="w-20 h-20 rounded-2xl" />
+          <h1 className="text-3xl xl:text-4xl font-bold text-foreground font-mono leading-tight">
+            SecureForge Web
+          </h1>
+          <p className="text-base text-muted-foreground leading-relaxed max-w-md">
+            Acesse o painel para gerenciar aplicações, executar checklists de hardening e acompanhar achados de segurança.
+          </p>
+        </div>
+
+        <div className="w-full max-w-xl mx-auto lg:mx-0 lg:max-w-none">
+        <div className="text-center lg:text-left mb-6 flex flex-col items-center lg:items-start gap-3">
+          <BrandLogo variant="icon" iconClassName="w-16 h-16 rounded-2xl lg:hidden" />
           <div>
-            <h1 className="text-2xl font-bold text-foreground font-mono">SecureForge Web</h1>
-            <p className="text-muted-foreground text-sm mt-1">Diagnóstico e Hardening de Aplicações Web</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-mono">SecureForge Web</h1>
+            <p className="text-muted-foreground text-base mt-1">Diagnóstico e Hardening de Aplicações Web</p>
           </div>
         </div>
 
         {!showForgot ? (
           /* ── Login Form ── */
-          <div className="bg-card border border-border rounded-xl p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-foreground mb-6">Acesso ao Sistema</h2>
-            <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-6 sm:p-8 shadow-xl">
+            <h2 className="text-xl font-semibold text-foreground mb-6">Acesso ao Sistema</h2>
+            <div className="space-y-5">
               <div>
                 <Label htmlFor="email" className="text-sm text-muted-foreground">Email</Label>
                 <div className="relative mt-1">
@@ -301,9 +316,10 @@ export default function Login() {
           </div>
         )}
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
+        <p className="text-center lg:text-left text-sm text-muted-foreground mt-5">
           Projeto Integrador · Trilha 1 AppHardener · SecureForge Web
         </p>
+        </div>
       </div>
     </div>
   );

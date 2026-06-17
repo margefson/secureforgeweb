@@ -22,6 +22,27 @@
       "when": 1750636800000,
       "tag": "0011_posturaweb_phase2",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751241600000,
+      "tag": "0012_posturaweb_phase3",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1751846400000,
+      "tag": "0013_posturaweb_phase5",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1752451200000,
+      "tag": "0014_posturaweb_phase6b",
+      "breakpoints": true
     }
   ]
 }

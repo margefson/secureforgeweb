@@ -1,1 +1,86 @@
-https://github.com/margefson/incident_security_system/tree/main
+2. Base da ferramenta e estrutura funcional mínima
+Objetivo da entrega
+
+Nesta segunda entrega, cada equipe deverá transformar o planejamento inicial da ferramenta em uma base funcional mínima, capaz de sustentar o desenvolvimento das funcionalidades centrais nas próximas aulas.
+
+O objetivo desta etapa é fazer com que a equipe avance da definição conceitual para uma primeira versão executável da solução, com os principais componentes estruturais do sistema já organizados. Ao final desta entrega, espera-se que a ferramenta já possua sua base técnica inicial implementada, ainda que de forma parcial, permitindo continuidade incremental no restante da disciplina.
+
+Esta entrega corresponde à etapa de estruturação técnica da solução, incluindo organização da aplicação, definição da persistência, implementação dos módulos principais e preparação do fluxo que será consolidado na etapa seguinte.
+
+
+Cada equipe deverá submeter um documento contendo:
+
+1. Link do repositório atualizado
+O repositório deve mostrar claramente a evolução em relação à Entrega 1.
+
+2. Descrição breve do estado atual da ferramenta
+Um texto curto explicando:
+
+O que já foi implementado
+O que já está funcionando
+O que ainda está em desenvolvimento
+3. Estrutura inicial da aplicação
+A equipe deverá mostrar:
+
+Organização geral do projeto
+Principais diretórios ou componentes
+Módulos já criados
+4. Modelo inicial da ferramenta
+A equipe deverá apresentar:
+
+Entidades principais
+Estruturas de dados centrais
+Persistência adotada, quando aplicável
+5. Evidência de execução local
+A equipe deverá demonstrar que a ferramenta já executa localmente, por exemplo por meio de:
+
+print
+pequeno vídeo
+ou descrição acompanhada de evidência visual
+6. Funcionalidades já implementadas
+A equipe deverá indicar, de forma objetiva, quais funcionalidades da solução já foram iniciadas ou concluídas.
+
+7. Ajustes no escopo, se houver
+Caso a equipe tenha alterado o recorte da solução em relação à Entrega 1, isso deverá ser explicado brevemente.
+
+
+O que se espera de cada trilha nesta etapa
+Embora todas as equipes devam entregar uma base funcional mínima, o conteúdo específico da Entrega 2 varia de acordo com a trilha escolhida.
+
+Trilha 1 — AppHardener
+Nesta etapa, espera-se que a equipe já tenha implementado a base da ferramenta de diagnóstico e hardening.
+
+Exemplos do que pode ser entregue
+Cadastro de aplicações ou projetos
+Estrutura para checklist de segurança
+Estrutura para registro de achados
+Primeira versão do fluxo de análise da aplicação
+Persistência dos registros
+Painel inicial ou tela principal da ferramenta
+Exemplo de resultado esperado
+O sistema já permite cadastrar uma aplicação e iniciar a avaliação de alguns itens de segurança, mesmo que o processo de hardening ainda não esteja completo.
+
+Trilha 2 — CodeGuard
+Nesta etapa, espera-se que a equipe já tenha implementado a base da ferramenta de apoio à revisão de código seguro.
+
+Exemplos do que pode ser entregue
+Upload de arquivo ou leitura de código
+Estrutura para regras de análise
+Organização do mecanismo de identificação de padrões inseguros
+Exibição inicial dos achados
+Estrutura para recomendações de correção
+Exemplo de resultado esperado
+O sistema já consegue receber um arquivo ou trecho de código e iniciar a aplicação de regras simples, ainda que a análise completa ainda não esteja pronta.
+
+Trilha 3 — VulnCase
+Nesta etapa, espera-se que a equipe já tenha implementado a base da ferramenta de gestão de achados e correções.
+
+Exemplos do que pode ser entregue
+Cadastro de projeto ou ativo
+Cadastro inicial de achados
+Severidade e status
+Estrutura de responsável e evidência
+Primeira visualização consolidada dos registros
+Persistência de dados da ferramenta
+Exemplo de resultado esperado
+O sistema já permite registrar um projeto e cadastrar achados de segurança associados, ainda que relatórios e recursos mais avançados ainda não estejam finalizados. 

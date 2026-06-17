@@ -5,6 +5,8 @@
 **Data:** 15/06/2026  
 **Versão do documento:** 1.0
 
+> **Documento histórico.** Para o **estado atual implementado** do sistema (Entrega 2, 16/06/2026), consulte [RELATORIO_ENTREGA_2.md](./RELATORIO_ENTREGA_2.md), [MANUAL.md](./MANUAL.md) e [DEMO.md](./DEMO.md).
+
 ---
 
 ## Objetivo desta entrega
@@ -111,9 +113,9 @@ A primeira versão funcional (MVP) deve permitir que um usuário:
 | Fase 0 | Setup, rebrand, remoção ML/SIEM | Concluída |
 | Fase 1 | Aplicações + checklist seed | Concluída |
 | Fase 2 | Análise guiada + wizard | Concluída |
-| Fase 3 | Achados + recomendações | Planejada |
-| Fase 4 | Dashboard métricas + PDF | Planejada |
-| Fase 5 | Refinamento e entrega final | Planejada |
+| Fase 3 | Achados + recomendações | Concluída |
+| Fase 4 | Dashboard métricas + PDF | Concluída |
+| Fase 5 | Refinamento e entrega final | Concluída |
 
 ---
 

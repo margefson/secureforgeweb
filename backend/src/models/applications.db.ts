@@ -34,7 +34,7 @@ export async function getApplicationById(id: number): Promise<Application | unde
 export async function updateApplication(
   id: number,
   userId: number,
-  data: Partial<Pick<Application, "name" | "baseUrl" | "description" | "techStack">>
+  data: Partial<Pick<Application, "name" | "baseUrl" | "repositoryUrl" | "description" | "techStack">>
 ): Promise<Application | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

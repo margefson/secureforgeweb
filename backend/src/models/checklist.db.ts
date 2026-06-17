@@ -84,4 +84,22 @@ export async function countChecklistItems(): Promise<number> {
   return items.length;
 }
 
+export async function updateChecklistItemById(
+  id: number,
+  data: {
+    title?: string;
+    description?: string;
+    suggestedSeverity?: "critical" | "high" | "medium" | "low";
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .update(checklistItems)
+    .set(data)
+    .where(eq(checklistItems.id, id))
+    .returning();
+  return row;
+}
+
 export { defaultRecommendations };
