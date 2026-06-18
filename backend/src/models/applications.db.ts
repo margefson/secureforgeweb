@@ -24,6 +24,33 @@ export async function getApplicationsByUser(userId: number): Promise<Application
     .orderBy(desc(applications.updatedAt));
 }
 
+export type ApplicationWithOwner = Application & {
+  ownerName: string | null;
+  ownerEmail: string | null;
+};
+
+export async function getAllApplicationsWithOwner(): Promise<ApplicationWithOwner[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const { users } = await import("../../drizzle/schema.js");
+  const rows = await db
+    .select({
+      application: applications,
+      ownerName: users.name,
+      ownerEmail: users.email,
+    })
+    .from(applications)
+    .innerJoin(users, eq(applications.userId, users.id))
+    .orderBy(desc(applications.updatedAt));
+
+  return rows.map((row) => ({
+    ...row.application,
+    ownerName: row.ownerName,
+    ownerEmail: row.ownerEmail,
+  }));
+}
+
 export async function getApplicationById(id: number): Promise<Application | undefined> {
   const db = await getDb();
   if (!db) return undefined;

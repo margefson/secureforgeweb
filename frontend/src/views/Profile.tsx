@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { isPasswordValid } from "@/lib/password";
-import { User, Mail, Shield, Calendar, Lock, Eye, EyeOff, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { User, Mail, Shield, Calendar, Lock, Eye, EyeOff, AlertTriangle, CheckCircle, XCircle, Brain } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,6 +149,12 @@ export default function Profile() {
                     <p className="text-base font-mono text-foreground">{formatDate(user?.createdAt)}</p>
                   </div>
                 </div>
+                <Link href="/profile/ai-assistant">
+                  <Button variant="outline" className="w-full font-mono text-sm mt-2">
+                    <Brain className="w-4 h-4 mr-2 text-violet-500" />
+                    Configurar Assistente IA
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
 import {
   LayoutDashboard, Shield, LogOut, User, ChevronRight,
-  Globe, BarChart2, Users, ListChecks,
+  Globe, BarChart2, Users, ListChecks, BarChart3,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -30,6 +30,7 @@ const adminItems = [
   { path: "/admin", label: "Painel Admin", icon: Shield },
   { path: "/admin/users", label: "Usuários", icon: Users },
   { path: "/admin/checklist-items", label: "Checklist OWASP", icon: ListChecks },
+  { path: "/admin/analyses", label: "Análises globais", icon: BarChart3 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

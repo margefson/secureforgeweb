@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod/v4";
 import type { AutoAssessmentSuggestion } from "./checklistAssessor.js";
+import { getAiAssistantRuntimeConfig, formatLlmHttpError } from "./aiAssistantConfig.js";
 import {
   assessHttpSecurityItems,
   fetchHttpSecuritySnapshot,
@@ -18,6 +19,7 @@ import {
   type GitRepositorySnapshot,
 } from "./gitRepoAssessor.js";
 import type { ComplianceValue } from "../models/analyses.db.js";
+import { enrichSuggestionArtifacts } from "./assessmentEvidence.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -68,7 +70,7 @@ export type NpmAuditSummary = {
   total: number;
 };
 
-export type AiAssessmentMode = "llm" | "heuristic";
+export type AiAssessmentMode = "llm" | "heuristic" | "heuristic-fallback";
 
 export type AiAssessmentResult = {
   mode: AiAssessmentMode;
@@ -411,6 +413,33 @@ function asAiSuggestions(suggestions: AutoAssessmentSuggestion[]): AutoAssessmen
   return suggestions.map((s) => ({ ...s, source: "ai" as const }));
 }
 
+function attachArtifactsToSuggestion(
+  suggestion: AutoAssessmentSuggestion,
+  ctx: AiAssessmentContext
+): AutoAssessmentSuggestion {
+  if (suggestion.artifacts?.length) {
+    return suggestion;
+  }
+  return {
+    ...suggestion,
+    artifacts: enrichSuggestionArtifacts({
+      itemCode: suggestion.itemCode,
+      evidence: suggestion.evidence,
+      rationale: suggestion.rationale,
+      gitSnapshot: ctx.gitSnapshot,
+      httpSnapshot: ctx.httpSnapshot,
+      npmAuditSummary: ctx.npmAuditSummary,
+    }),
+  };
+}
+
+function attachArtifactsToSuggestions(
+  suggestions: AutoAssessmentSuggestion[],
+  ctx: AiAssessmentContext
+): AutoAssessmentSuggestion[] {
+  return suggestions.map((s) => attachArtifactsToSuggestion(s, ctx));
+}
+
 /** Combina regras 6A + 6B + 6C e preenche todo o checklist (24 itens). */
 export function buildFullChecklistAiSuggestions(
   ctx: AiAssessmentContext,
@@ -446,7 +475,7 @@ export function buildFullChecklistAiSuggestions(
     }
   }
 
-  return Array.from(map.values());
+  return attachArtifactsToSuggestions(Array.from(map.values()), ctx);
 }
 
 function assessHeuristicItem(code: AiAssessmentItemCode, ctx: AiAssessmentContext): HeuristicResult {
@@ -481,6 +510,14 @@ export function assessAiItemsHeuristic(
       itemCode: item.code,
       ...assessed,
       source: "ai",
+      artifacts: enrichSuggestionArtifacts({
+        itemCode: item.code,
+        evidence: assessed.evidence,
+        rationale: assessed.rationale,
+        gitSnapshot: ctx.gitSnapshot,
+        httpSnapshot: ctx.httpSnapshot,
+        npmAuditSummary: ctx.npmAuditSummary,
+      }),
     });
   }
 
@@ -533,16 +570,18 @@ function buildLlmPrompt(ctx: AiAssessmentContext, items: AiAssessmentItemInput[]
 }
 
 async function assessWithLlm(
+  userId: number,
   ctx: AiAssessmentContext,
   items: AiAssessmentItemInput[]
 ): Promise<AutoAssessmentSuggestion[]> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY não configurada");
+  const llm = await getAiAssistantRuntimeConfig(userId);
+  if (!llm.apiKey || !llm.enabled) {
+    throw new Error("Assistente IA não configurado ou desabilitado");
   }
 
-  const baseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const apiKey = llm.apiKey;
+  const baseUrl = llm.baseUrl.replace(/\/$/, "");
+  const model = llm.model;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -567,7 +606,7 @@ async function assessWithLlm(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`LLM indisponível (HTTP ${response.status}): ${body.slice(0, 200)}`);
+    throw new Error(formatLlmHttpError(response.status, body));
   }
 
   const payload = (await response.json()) as {
@@ -604,6 +643,14 @@ async function assessWithLlm(
       evidence: row.evidence.slice(0, 2000),
       rationale: row.rationale.slice(0, 2000),
       source: "ai",
+      artifacts: enrichSuggestionArtifacts({
+        itemCode: row.itemCode,
+        evidence: row.evidence,
+        rationale: row.rationale,
+        gitSnapshot: ctx.gitSnapshot,
+        httpSnapshot: ctx.httpSnapshot,
+        npmAuditSummary: ctx.npmAuditSummary,
+      }),
     });
   }
 
@@ -627,6 +674,7 @@ export function summarizeAiContext(ctx: AiAssessmentContext): string {
 }
 
 export async function runAiAgentAssessment(input: {
+  userId: number;
   name: string;
   baseUrl: string | null;
   repositoryUrl: string | null;
@@ -649,9 +697,15 @@ export async function runAiAgentAssessment(input: {
 
   const baseSuggestions = buildFullChecklistAiSuggestions(context, input.items);
 
-  if (process.env.OPENAI_API_KEY?.trim()) {
+  const llmConfig = await getAiAssistantRuntimeConfig(input.userId);
+  const configuredModelKey =
+    llmConfig.source === "database"
+      ? `${llmConfig.provider}:${llmConfig.model}`
+      : null;
+
+  if (llmConfig.apiKey && llmConfig.enabled) {
     try {
-      const llmSuggestions = await assessWithLlm(context, input.items);
+      const llmSuggestions = await assessWithLlm(input.userId, context, input.items);
       if (llmSuggestions.length > 0) {
         const merged = new Map(baseSuggestions.map((s) => [s.itemCode, s]));
         for (const s of llmSuggestions) {
@@ -661,9 +715,9 @@ export async function runAiAgentAssessment(input: {
           context,
           result: {
             mode: "llm",
-            provider: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+            provider: configuredModelKey ?? `${llmConfig.provider}:${llmConfig.model}`,
             contextSummary: summarizeAiContext(context),
-            suggestions: Array.from(merged.values()),
+            suggestions: attachArtifactsToSuggestions(Array.from(merged.values()), context),
           },
         };
       }
@@ -675,8 +729,8 @@ export async function runAiAgentAssessment(input: {
   return {
     context,
     result: {
-      mode: "heuristic",
-      provider: process.env.OPENAI_API_KEY?.trim() ? "heuristic-fallback" : "heuristic-local",
+      mode: llmConfig.apiKey && llmConfig.enabled ? "heuristic-fallback" : "heuristic",
+      provider: configuredModelKey ?? "heuristic-local",
       contextSummary: summarizeAiContext(context),
       suggestions: baseSuggestions,
     },

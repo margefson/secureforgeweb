@@ -28,6 +28,12 @@ import {
   AI_ORCHESTRATED_ITEM_CODES,
   runAiAgentAssessment,
 } from "../services/aiChecklistAssessor.js";
+import {
+  AI_PROVIDER_IDS,
+  getAiAssistantPublicConfig,
+  saveAiAssistantConfig,
+  testAiAssistantConnection,
+} from "../services/aiAssistantConfig.js";
 import crypto from "crypto";
 import { registerSchema, loginSchema, createApplicationSchema, updateApplicationSchema, createAnalysisSchema, saveResponsesSchema, createFindingSchema, updateFindingSchema, updateFindingStatusSchema, listFindingsSchema, validateJoi, isPasswordValid } from "../lib/validation.js";
 import bcrypt from "bcryptjs";
@@ -36,6 +42,7 @@ import { sdk } from "../_core/sdk.js";
 import {
   createApplication,
   getApplicationsByUser,
+  getAllApplicationsWithOwner,
   getApplicationById,
   updateApplication,
   deleteApplication,
@@ -45,7 +52,8 @@ import { getChecklistCatalog, updateChecklistItemById } from "../models/checklis
 import {
   createAnalysis,
   getAnalysisById,
-  getAnalysesByApplication,
+  getAnalysesEnrichedByApplication,
+  getAllAnalysesForAdmin,
   getAnalysisWizardState,
   saveAnalysisResponses,
   completeAnalysis,
@@ -67,6 +75,8 @@ import {
   getPostureReportData,
 } from "../models/dashboard.db.js";
 import { generatePosturePdfBuffer } from "../services/pdf.js";
+import { recordAssessmentRun } from "../models/assessmentRuns.db.js";
+import { upsertAnalysisItemEvidence } from "../models/analysisItemEvidence.db.js";
 
 async function assertApplicationAccess(applicationId: number, userId: number, isAdmin: boolean) {
   const app = await getApplicationById(applicationId);
@@ -296,6 +306,17 @@ const adminRouter = router({
 
   listChecklistItems: adminProcedure.query(async () => getChecklistCatalog()),
 
+  listAnalyses: adminProcedure
+    .input(
+      z
+        .object({
+          applicationId: z.number().optional(),
+          baseUrl: z.string().max(500).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => getAllAnalysesForAdmin(input ?? undefined)),
+
   updateChecklistItem: adminProcedure
     .input(
       z.object({
@@ -316,6 +337,46 @@ const adminRouter = router({
       }
       return updated;
     }),
+
+});
+
+const aiAssistantRouter = router({
+  getConfig: protectedProcedure.query(async ({ ctx }) =>
+    getAiAssistantPublicConfig(ctx.user.id)
+  ),
+
+  updateConfig: protectedProcedure
+    .input(
+      z.object({
+        provider: z.enum(AI_PROVIDER_IDS),
+        apiKey: z.string().max(500).optional(),
+        model: z.string().min(1).max(120),
+        baseUrl: z.string().max(500),
+        enabled: z.boolean(),
+      })
+    )
+    .mutation(async ({ input, ctx }) =>
+      saveAiAssistantConfig({
+        ...input,
+        userId: ctx.user.id,
+      })
+    ),
+
+  testConnection: protectedProcedure
+    .input(
+      z.object({
+        provider: z.enum(AI_PROVIDER_IDS).optional(),
+        apiKey: z.string().max(500).optional(),
+        model: z.string().max(120).optional(),
+        baseUrl: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) =>
+      testAiAssistantConnection({
+        userId: ctx.user.id,
+        ...input,
+      })
+    ),
 });
 
 const notificationsRouter = router({
@@ -371,7 +432,12 @@ const applicationsRouter = router({
       }
     }),
 
-  list: protectedProcedure.query(async ({ ctx }) => getApplicationsByUser(ctx.user.id)),
+  list: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role === "admin") {
+      return getAllApplicationsWithOwner();
+    }
+    return getApplicationsByUser(ctx.user.id);
+  }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
@@ -469,7 +535,7 @@ const analysesRouter = router({
         ctx.user.id,
         ctx.user.role === "admin"
       );
-      return getAnalysesByApplication(input.applicationId);
+      return getAnalysesEnrichedByApplication(input.applicationId);
     }),
 
   getWizard: protectedProcedure
@@ -536,6 +602,17 @@ const analysesRouter = router({
 
           const { snapshot, suggestions } = await runHttpHeaderAssessment(application.baseUrl, itemInputs);
 
+          await recordAssessmentRun({
+            analysisId: input.analysisId,
+            userId: ctx.user.id,
+            scope: "http_headers",
+            assessmentMode: "auto",
+            provider: "http-headers",
+            itemsAssessed: suggestions.length,
+          });
+
+          await upsertAnalysisItemEvidence(input.analysisId, "http_headers", suggestions);
+
           return {
             scope: input.scope,
             assessedUrl: snapshot.finalUrl,
@@ -560,6 +637,18 @@ const analysesRouter = router({
             application.repositoryUrl,
             itemInputs
           );
+
+          await recordAssessmentRun({
+            analysisId: input.analysisId,
+            userId: ctx.user.id,
+            scope: "git_repo",
+            assessmentMode: "auto",
+            provider: "git-repo",
+            itemsAssessed: suggestions.length,
+            contextSummary: `${snapshot.filesScanned} arquivo(s)`,
+          });
+
+          await upsertAnalysisItemEvidence(input.analysisId, "git_repo", suggestions);
 
           return {
             scope: input.scope,
@@ -589,6 +678,7 @@ const analysesRouter = router({
           }));
 
           const { context, result: aiResult } = await runAiAgentAssessment({
+            userId: ctx.user.id,
             name: application.name,
             baseUrl: application.baseUrl,
             repositoryUrl: application.repositoryUrl,
@@ -596,6 +686,18 @@ const analysesRouter = router({
             description: application.description,
             items: aiItemInputs,
           });
+
+          await recordAssessmentRun({
+            analysisId: input.analysisId,
+            userId: ctx.user.id,
+            scope: "ai_agent",
+            assessmentMode: aiResult.mode,
+            provider: aiResult.provider,
+            itemsAssessed: aiResult.suggestions.length,
+            contextSummary: aiResult.contextSummary,
+          });
+
+          await upsertAnalysisItemEvidence(input.analysisId, "ai_agent", aiResult.suggestions);
 
           return {
             scope: input.scope,
@@ -898,4 +1000,4 @@ const reportsRouter = router({
     }),
 });
 
-export { authRouter, adminRouter, notificationsRouter, applicationsRouter, checklistRouter, analysesRouter, findingsRouter, reportsRouter };
+export { authRouter, adminRouter, aiAssistantRouter, notificationsRouter, applicationsRouter, checklistRouter, analysesRouter, findingsRouter, reportsRouter };

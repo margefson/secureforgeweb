@@ -7,10 +7,16 @@ import {
   InsertAnalysis,
   Analysis,
   ChecklistResponse,
+  applications,
+  users,
 } from "../../drizzle/schema.js";
 import { getActiveChecklist, listChecklistCategories, listChecklistItems } from "./checklist.db.js";
 import { deleteFindingsByAnalysisIds } from "./findings.db.js";
 import { getApplicationById } from "./applications.db.js";
+import { getAssessmentRunsForAnalyses } from "./assessmentRuns.db.js";
+import { getItemEvidenceByAnalysis } from "./analysisItemEvidence.db.js";
+import { getUserAiAssistantConfigsByUserIds } from "./userAiAssistantConfig.db.js";
+import { resolveExecutorAiModel } from "../services/aiAssistantConfig.js";
 import type { ChecklistItemWithCategory } from "./checklist.db.js";
 
 export type ComplianceValue = "conforme" | "parcial" | "nao_conforme" | "nao_aplicavel";
@@ -86,6 +92,208 @@ export async function getAnalysesByApplication(applicationId: number): Promise<A
     .from(analyses)
     .where(eq(analyses.applicationId, applicationId))
     .orderBy(desc(analyses.createdAt));
+}
+
+export type AnalysisWithExecutor = Analysis & {
+  executorName: string | null;
+  executorEmail: string | null;
+  assessmentRuns: Array<{
+    id: number;
+    scope: string;
+    assessmentMode: string | null;
+    provider: string | null;
+    itemsAssessed: number;
+    assessedAt: Date;
+  }>;
+};
+
+export async function getAnalysesEnrichedByApplication(
+  applicationId: number
+): Promise<AnalysisWithExecutor[]> {
+  const rows = await getAnalysesByApplication(applicationId);
+  if (rows.length === 0) return [];
+
+  const db = await getDb();
+  if (!db) return [];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.userId)));
+  const userRows = await db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(inArray(users.id, userIds));
+  const userMap = new Map(userRows.map((u) => [u.id, u]));
+
+  const runs = await getAssessmentRunsForAnalyses(rows.map((r) => r.id));
+  const runsByAnalysis = new Map<number, typeof runs>();
+  for (const run of runs) {
+    const list = runsByAnalysis.get(run.analysisId) ?? [];
+    list.push(run);
+    runsByAnalysis.set(run.analysisId, list);
+  }
+
+  const executorConfigs = await getUserAiAssistantConfigsByUserIds(
+    Array.from(new Set(rows.map((r) => r.userId)))
+  );
+
+  return rows.map((analysis) => {
+    const user = userMap.get(analysis.userId);
+    const config = executorConfigs.get(analysis.userId);
+    const latestAi = (runsByAnalysis.get(analysis.id) ?? []).find((r) => r.scope === "ai_agent");
+    const aiModel = resolveExecutorAiModel({
+      runProvider: latestAi?.provider,
+      runMode: latestAi?.assessmentMode,
+      configuredProvider: config?.provider,
+      configuredModel: config?.model,
+    });
+
+    return {
+      ...analysis,
+      executorName: user?.name ?? null,
+      executorEmail: user?.email ?? null,
+      aiModelDisplay: aiModel.modelDisplay,
+      aiModelKey: aiModel.modelKey,
+      latestAiMode: aiModel.mode,
+      assessmentRuns: (runsByAnalysis.get(analysis.id) ?? []).map((run) => ({
+        id: run.id,
+        scope: run.scope,
+        assessmentMode: run.assessmentMode,
+        provider: run.provider,
+        itemsAssessed: run.itemsAssessed,
+        assessedAt: run.assessedAt,
+      })),
+    };
+  });
+}
+
+export type AdminAnalysisOverview = {
+  analysisId: number;
+  analysisTitle: string;
+  analysisStatus: string;
+  startedAt: Date;
+  completedAt: Date | null;
+  postureScore: number | null;
+  executorId: number;
+  executorName: string | null;
+  executorEmail: string | null;
+  applicationId: number;
+  applicationName: string;
+  applicationBaseUrl: string | null;
+  applicationOwnerId: number;
+  applicationOwnerName: string | null;
+  applicationOwnerEmail: string | null;
+  latestAiProvider: string | null;
+  latestAiMode: string | null;
+  aiModelDisplay: string;
+  aiModelKey: string | null;
+  assessmentRunCount: number;
+};
+
+export async function getAllAnalysesForAdmin(filters?: {
+  applicationId?: number;
+  baseUrl?: string;
+}): Promise<AdminAnalysisOverview[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const { listChecklistItems } = await import("./checklist.db.js");
+  const { computePostureScore } = await import("./dashboard.db.js");
+
+  const conditions = [];
+  if (filters?.applicationId) {
+    conditions.push(eq(analyses.applicationId, filters.applicationId));
+  }
+  if (filters?.baseUrl?.trim()) {
+    conditions.push(eq(applications.baseUrl, filters.baseUrl.trim()));
+  }
+
+  const baseQuery = db
+    .select({
+      analysis: analyses,
+      application: applications,
+      executorName: users.name,
+      executorEmail: users.email,
+    })
+    .from(analyses)
+    .innerJoin(applications, eq(analyses.applicationId, applications.id))
+    .innerJoin(users, eq(analyses.userId, users.id));
+
+  const rows = await (conditions.length > 0
+    ? baseQuery.where(and(...conditions))
+    : baseQuery
+  ).orderBy(desc(analyses.createdAt));
+
+  if (rows.length === 0) return [];
+
+  const ownerIds = Array.from(new Set(rows.map((r) => r.application.userId)));
+  const owners = await db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(inArray(users.id, ownerIds));
+  const ownerMap = new Map(owners.map((o) => [o.id, o]));
+
+  const analysisIds = rows.map((r) => r.analysis.id);
+  const runs = await getAssessmentRunsForAnalyses(analysisIds);
+  const runsByAnalysis = new Map<number, typeof runs>();
+  for (const run of runs) {
+    const list = runsByAnalysis.get(run.analysisId) ?? [];
+    list.push(run);
+    runsByAnalysis.set(run.analysisId, list);
+  }
+
+  const executorIds = Array.from(new Set(rows.map((r) => r.analysis.userId)));
+  const executorConfigs = await getUserAiAssistantConfigsByUserIds(executorIds);
+
+  const result: AdminAnalysisOverview[] = [];
+
+  for (const row of rows) {
+    const owner = ownerMap.get(row.application.userId);
+    const analysisRuns = runsByAnalysis.get(row.analysis.id) ?? [];
+    const latestAi = analysisRuns.find((r) => r.scope === "ai_agent");
+    const config = executorConfigs.get(row.analysis.userId);
+    const aiModel = resolveExecutorAiModel({
+      runProvider: latestAi?.provider,
+      runMode: latestAi?.assessmentMode,
+      configuredProvider: config?.provider,
+      configuredModel: config?.model,
+    });
+
+    let postureScore: number | null = null;
+    if (row.analysis.status === "concluida") {
+      const responses = await db
+        .select({ compliance: checklistResponses.compliance })
+        .from(checklistResponses)
+        .where(eq(checklistResponses.analysisId, row.analysis.id));
+      const items = await listChecklistItems(row.analysis.checklistId);
+      if (responses.length > 0) {
+        postureScore = computePostureScore(responses, items.length);
+      }
+    }
+
+    result.push({
+      analysisId: row.analysis.id,
+      analysisTitle: row.analysis.title,
+      analysisStatus: row.analysis.status,
+      startedAt: row.analysis.startedAt,
+      completedAt: row.analysis.completedAt,
+      postureScore,
+      executorId: row.analysis.userId,
+      executorName: row.executorName,
+      executorEmail: row.executorEmail,
+      applicationId: row.application.id,
+      applicationName: row.application.name,
+      applicationBaseUrl: row.application.baseUrl,
+      applicationOwnerId: row.application.userId,
+      applicationOwnerName: owner?.name ?? null,
+      applicationOwnerEmail: owner?.email ?? null,
+      latestAiProvider: aiModel.modelKey,
+      latestAiMode: aiModel.mode,
+      aiModelDisplay: aiModel.modelDisplay,
+      aiModelKey: aiModel.modelKey,
+      assessmentRunCount: analysisRuns.length,
+    });
+  }
+
+  return result;
 }
 
 export async function getResponsesByAnalysis(analysisId: number): Promise<ChecklistResponse[]> {
@@ -231,11 +439,12 @@ export async function getAnalysisWizardState(analysisId: number) {
   const analysis = await getAnalysisById(analysisId);
   if (!analysis) return null;
 
-  const [categories, items, responses, application] = await Promise.all([
+  const [categories, items, responses, application, itemEvidence] = await Promise.all([
     listChecklistCategories(),
     listChecklistItems(analysis.checklistId),
     getResponsesByAnalysis(analysisId),
     getApplicationById(analysis.applicationId),
+    getItemEvidenceByAnalysis(analysisId),
   ]);
 
   const responseMap = Object.fromEntries(
@@ -268,6 +477,7 @@ export async function getAnalysisWizardState(analysisId: number) {
     categories: categoriesWithItems,
     items,
     responses: responseMap,
+    itemEvidence,
     progress,
   };
 }

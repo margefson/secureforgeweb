@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Globe, Plus, ExternalLink, Trash2 } from "lucide-react";
@@ -7,7 +8,9 @@ import { toast } from "sonner";
 
 export default function Applications() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const utils = trpc.useUtils();
+  const isAdmin = user?.role === "admin";
   const { data: apps, isLoading } = trpc.applications.list.useQuery();
 
   const deleteMutation = trpc.applications.delete.useMutation({
@@ -26,7 +29,9 @@ export default function Applications() {
           <div>
             <h1 className="text-xl font-bold text-foreground font-mono">Aplicações</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Cadastre e gerencie aplicações web para análise de segurança
+              {isAdmin
+                ? "Todas as aplicações cadastradas no sistema (visão administrador)"
+                : "Cadastre e gerencie aplicações web para análise de segurança"}
             </p>
           </div>
           <Button className="font-mono text-xs" onClick={() => navigate("/applications/new")}>
@@ -60,6 +65,11 @@ export default function Applications() {
                     {app.baseUrl && (
                       <p className="text-xs text-muted-foreground font-mono mt-1 truncate flex items-center gap-1">
                         <ExternalLink className="w-3 h-3 shrink-0" /> {app.baseUrl}
+                      </p>
+                    )}
+                    {isAdmin && "ownerEmail" in app && (
+                      <p className="text-[10px] text-muted-foreground font-mono mt-1">
+                        Dono: {(app as { ownerEmail?: string | null }).ownerEmail ?? "—"}
                       </p>
                     )}
                     {app.description && (

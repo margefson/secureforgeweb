@@ -1,4 +1,12 @@
 import type { ComplianceValue } from "../models/analyses.db.js";
+import type { AssessmentEvidenceArtifact } from "./assessmentEvidence.js";
+import {
+  buildHttpHeadersArtifact,
+  buildHttpScanSummaryArtifact,
+  mergeArtifacts,
+} from "./assessmentEvidence.js";
+
+export type { AssessmentEvidenceArtifact };
 
 /** Itens avaliáveis via HTTP na Fase 6A (headers + HTTPS). */
 export const HTTP_ASSESSMENT_ITEM_CODES = [
@@ -19,6 +27,7 @@ export type AutoAssessmentSuggestion = {
   evidence: string;
   rationale: string;
   source: "auto" | "ai";
+  artifacts?: AssessmentEvidenceArtifact[];
 };
 
 export type HttpSecuritySnapshot = {
@@ -94,78 +103,106 @@ export async function fetchHttpSecuritySnapshot(baseUrl: string): Promise<HttpSe
   }
 }
 
+type HttpAssessmentResult = Omit<AutoAssessmentSuggestion, "itemId" | "itemCode">;
+
+function withHttpArtifacts(
+  code: HttpAssessmentItemCode,
+  snapshot: HttpSecuritySnapshot,
+  base: Omit<HttpAssessmentResult, "artifacts">
+): HttpAssessmentResult {
+  const highlight =
+    code === "HEADER-01"
+      ? ["content-security-policy"]
+      : code === "HEADER-02"
+        ? ["strict-transport-security"]
+        : code === "HEADER-03"
+          ? ["x-frame-options", "content-security-policy"]
+          : code === "HEADER-04"
+            ? ["x-content-type-options"]
+            : code === "DATA-01"
+              ? []
+              : [];
+
+  const artifacts = mergeArtifacts(
+    [buildHttpScanSummaryArtifact(snapshot)],
+    highlight.length ? [buildHttpHeadersArtifact(snapshot, highlight)] : undefined
+  );
+
+  return { ...base, artifacts };
+}
+
 function assessSingleItem(
   code: HttpAssessmentItemCode,
   snapshot: HttpSecuritySnapshot
-): Omit<AutoAssessmentSuggestion, "itemId" | "itemCode"> {
+): HttpAssessmentResult {
   const finalProtocol = new URL(snapshot.finalUrl).protocol;
   const isHttps = finalProtocol === "https:";
 
   switch (code) {
     case "DATA-01": {
       if (isHttps) {
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "conforme",
           confidence: 98,
           evidence: `Resposta final via HTTPS (${snapshot.finalUrl}, HTTP ${snapshot.statusCode}).`,
           rationale: "A aplicação respondeu em conexão HTTPS.",
           source: "auto",
-        };
+        });
       }
-      return {
+      return withHttpArtifacts(code, snapshot, {
         compliance: "nao_conforme",
         confidence: 98,
         evidence: `Resposta final via HTTP (${snapshot.finalUrl}, HTTP ${snapshot.statusCode}).`,
         rationale: "Dados sensíveis devem trafegar exclusivamente via HTTPS.",
         source: "auto",
-      };
+      });
     }
     case "HEADER-01": {
       const csp = headerValue(snapshot.headers, "content-security-policy");
       if (csp?.trim()) {
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "conforme",
           confidence: 92,
           evidence: `Content-Security-Policy: ${csp.slice(0, 240)}${csp.length > 240 ? "…" : ""}`,
           rationale: "Header CSP presente na resposta HTTP.",
           source: "auto",
-        };
+        });
       }
-      return {
+      return withHttpArtifacts(code, snapshot, {
         compliance: "nao_conforme",
         confidence: 90,
         evidence: `Header Content-Security-Policy ausente (${snapshot.finalUrl}).`,
         rationale: "Nenhum CSP foi detectado na resposta analisada.",
         source: "auto",
-      };
+      });
     }
     case "HEADER-02": {
       const hsts = headerValue(snapshot.headers, "strict-transport-security");
       if (!isHttps) {
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "nao_conforme",
           confidence: 95,
           evidence: `Conexão final em HTTP (${snapshot.finalUrl}). HSTS exige HTTPS.`,
           rationale: "Strict-Transport-Security não se aplica sem HTTPS ativo.",
           source: "auto",
-        };
+        });
       }
       if (hsts?.trim()) {
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "conforme",
           confidence: 92,
           evidence: `Strict-Transport-Security: ${hsts}`,
           rationale: "Header HSTS detectado na resposta HTTPS.",
           source: "auto",
-        };
+        });
       }
-      return {
+      return withHttpArtifacts(code, snapshot, {
         compliance: "nao_conforme",
         confidence: 90,
         evidence: `Strict-Transport-Security ausente em ${snapshot.finalUrl}.`,
         rationale: "Resposta HTTPS sem header HSTS.",
         source: "auto",
-      };
+      });
     }
     case "HEADER-03": {
       const xfo = headerValue(snapshot.headers, "x-frame-options");
@@ -176,40 +213,40 @@ function assessSingleItem(
           xfo?.trim() ? `X-Frame-Options: ${xfo}` : null,
           hasFrameAncestors ? "CSP contém frame-ancestors" : null,
         ].filter(Boolean);
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "conforme",
           confidence: 90,
           evidence: parts.join(" · "),
           rationale: "Proteção anti-clickjacking detectada (X-Frame-Options ou CSP frame-ancestors).",
           source: "auto",
-        };
+        });
       }
-      return {
+      return withHttpArtifacts(code, snapshot, {
         compliance: "nao_conforme",
         confidence: 88,
         evidence: `X-Frame-Options e frame-ancestors ausentes (${snapshot.finalUrl}).`,
         rationale: "Nenhuma proteção contra clickjacking foi encontrada nos headers.",
         source: "auto",
-      };
+      });
     }
     case "HEADER-04": {
       const nosniff = headerValue(snapshot.headers, "x-content-type-options");
       if (nosniff?.toLowerCase().includes("nosniff")) {
-        return {
+        return withHttpArtifacts(code, snapshot, {
           compliance: "conforme",
           confidence: 92,
           evidence: `X-Content-Type-Options: ${nosniff}`,
           rationale: "Header nosniff presente.",
           source: "auto",
-        };
+        });
       }
-      return {
+      return withHttpArtifacts(code, snapshot, {
         compliance: "nao_conforme",
         confidence: 90,
         evidence: `X-Content-Type-Options ausente ou inválido (${snapshot.finalUrl}).`,
         rationale: "MIME sniffing não está bloqueado via header nosniff.",
         source: "auto",
-      };
+      });
     }
     default:
       throw new Error(`Código de item não suportado: ${code}`);

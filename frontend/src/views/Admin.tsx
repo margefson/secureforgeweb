@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ShieldAlert, Users, ListChecks } from "lucide-react";
+import { ShieldAlert, Users, ListChecks, Brain, BarChart3 } from "lucide-react";
 
 export default function Admin() {
   const [, navigate] = useLocation();
@@ -34,6 +34,20 @@ export default function Admin() {
       desc: "Visualizar e ajustar severidade sugerida dos itens",
       path: "/admin/checklist-items",
       color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
+    },
+    {
+      icon: BarChart3,
+      label: "Análises globais",
+      desc: "Todas as análises e benchmark de modelos por aplicação",
+      path: "/admin/analyses",
+      color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
+    },
+    {
+      icon: Brain,
+      label: "Meu Assistente IA",
+      desc: "Sua chave, provedor e modelo de LLM",
+      path: "/profile/ai-assistant",
+      color: "text-violet-400 bg-violet-400/10 border-violet-400/20",
     },
   ];
 

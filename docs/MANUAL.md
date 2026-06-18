@@ -2,6 +2,8 @@
 
 Plataforma de diagnóstico e hardening de aplicações web (Trilha 1 — AppHardener).
 
+Documentação da entrega atual: [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)
+
 ---
 
 ## 1. Acesso ao sistema
@@ -12,25 +14,51 @@ Plataforma de diagnóstico e hardening de aplicações web (Trilha 1 — AppHard
 
 ---
 
-## 2. Cadastrar uma aplicação
+## 2. Configurar o assistente IA (por usuário)
+
+Cada usuário possui **configuração independente** de LLM. Não é compartilhada com outros operadores.
+
+1. Menu do usuário → **Perfil** (`/profile`)
+2. Clique em **Configurar Assistente IA** (`/profile/ai-assistant`)
+3. Preencha:
+   - **Provedor** — OpenAI, Google Gemini, Microsoft Copilot (Azure) ou compatível OpenAI (custom)
+   - **URL base da API** — preenchida automaticamente pelo preset (ajuste se necessário)
+   - **Modelo** — ex.: `gpt-4o-mini`, `gemini-2.0-flash`
+   - **Chave de API** — do provedor escolhido
+4. Ative **Habilitar assistente IA (LLM)** se desejar usar o modelo remoto
+5. Use **Testar conexão** antes de salvar
+6. Clique em **Salvar configuração**
+
+| Modo | Condição |
+|---|---|
+| **LLM** | Chave válida + assistente habilitado |
+| **Heurístico** | Sem chave, assistente desabilitado ou falha/quota da API |
+
+> O assistente IA nas análises usa **sempre a config do usuário logado** que executa a análise.
+
+---
+
+## 3. Cadastrar uma aplicação
 
 1. Menu **Aplicações** → **Nova Aplicação**
 2. Preencha:
    - **Nome** (obrigatório)
    - **URL base** (ex.: `https://app.exemplo.com`)
    - **Repositório Git** (ex.: `https://github.com/org/projeto` — repositório público HTTPS)
-   - **Stack tecnológica** (opcional, ex.: React + Node)
+   - **Stack tecnológica** (opcional)
    - **Descrição** (opcional)
-3. **Pelo menos URL base ou repositório Git** deve ser informado — necessário para habilitar análises automáticas
+3. **Pelo menos URL base ou repositório Git** deve ser informado
 4. Salve — a aplicação aparecerá na lista
+
+**Perfil admin:** em **Aplicações**, a lista exibe **todas** as aplicações do sistema, com o e-mail do dono.
 
 ---
 
-## 3. Executar análise de checklist
+## 4. Executar análise de checklist
 
 1. Abra o detalhe da aplicação
-2. Clique em **Iniciar análise** (ou **Continuar análise** se houver uma em andamento)
-3. No wizard, navegue pelas **9 categorias OWASP** (24 itens) usando as abas no topo
+2. Clique em **Iniciar análise** (ou **Continuar análise**)
+3. No wizard, navegue pelas **9 categorias OWASP** (24 itens)
 4. Para cada item, selecione a conformidade:
    - Conforme
    - Parcialmente conforme
@@ -42,129 +70,148 @@ Plataforma de diagnóstico e hardening de aplicações web (Trilha 1 — AppHard
 
 | Ação | Comportamento |
 |---|---|
-| **Salvar categoria** | Persiste as respostas já preenchidas (parcial ou completo) |
-| **Salvar e continuar** | Exige todos os itens da categoria respondidos e avança para a próxima |
-| **Trocar de aba (categoria)** | Salva automaticamente as respostas da categoria atual antes de mudar |
-| **Anterior** | Volta à categoria anterior (com salvamento automático) |
+| **Salvar categoria** | Persiste respostas parciais ou completas |
+| **Salvar e continuar** | Exige categoria completa e avança |
+| **Trocar de aba** | Auto-save da categoria atual |
+| **Anterior** | Volta com salvamento automático |
 
-> Você pode ir e voltar entre categorias a qualquer momento sem perder respostas já salvas.
+6. Após todas as categorias, clique em **Concluir e gerar achados**
 
-6. Após responder todas as categorias, no resumo clique em **Concluir e gerar achados**
+O histórico de análises no detalhe da aplicação mostra **quem executou** e o **modelo IA** configurado (quando aplicável).
 
 ---
 
-## 4. Análises automáticas assistidas
+## 5. Análises automáticas assistidas
 
-As análises automáticas **sugerem** conformidade com base em evidências coletadas. O analista **deve revisar** cada sugestão antes de salvar.
+As análises **sugerem** conformidade. O analista **deve revisar** antes de salvar.
 
 ### Por categoria
 
-Em cada categoria, botões disponíveis conforme o tipo de item:
-
 | Botão | Quando aparece | O que analisa |
 |---|---|---|
-| **Analisar headers HTTP** | Itens de headers/HTTPS | Fetch passivo da URL base cadastrada |
-| **Analisar repositório Git** | Itens de código (AUTH, INPUT, etc.) | Clone + heurísticas estáticas do repositório |
-| **Assistente IA (categoria)** | Sempre (se houver URL ou repo) | Sugestões para todos os itens da categoria |
+| **Analisar headers HTTP** | Itens de headers/HTTPS | Fetch passivo da URL base |
+| **Analisar repositório Git** | Itens de código | Clone + heurísticas estáticas |
+| **Assistente IA (categoria)** | URL ou repo cadastrado | Itens da categoria com o **seu** modelo IA |
 
 ### Por item
 
-Cada item possui o botão **Assistente IA** no canto superior direito — executa a análise **apenas naquele item**, de forma independente.
+Botão **Assistente IA** em cada card — analisa **apenas aquele item**.
 
 ### Sugestões automáticas
 
-- Badge **Sugestão automática** (cyan): análise HTTP ou Git
-- Badge **Sugestão IA** (roxo): assistente IA (LLM ou heurístico)
-- Exibem **nível de confiança**, evidência e raciocínio
-- Ao editar manualmente conformidade ou observações, a sugestão visual é removida daquele item
+- Badge **Sugestão automática** (cyan): HTTP ou Git
+- Badge **Sugestão IA** (roxo): assistente IA
+- Exibem confiança, evidência e raciocínio
+- Edição manual remove a sugestão visual do item
 
-### Assistente IA — modos de operação
-
-| Modo | Condição |
-|---|---|
-| **LLM** | `OPENAI_API_KEY` configurada no `.env` do servidor |
-| **Heurístico** | Fallback automático sem chave de API |
+Cada execução automática é registrada no servidor (escopo, modo, modelo) para auditoria e benchmark admin.
 
 ---
 
-## 5. Gerenciar achados
+## 6. Gerenciar achados
 
-1. No detalhe da aplicação, clique em **Ver achados**
-2. Use filtros por severidade, status e categoria
-3. Clique em um achado para ver:
-   - Recomendação de hardening
-   - Evidência registrada na análise
-   - Histórico de alterações de status
-4. Atualize o status: **Aberto** → **Em correção** → **Resolvido** (ou **Aceito risco**)
+1. No detalhe da aplicação → **Ver achados**
+2. Filtros por severidade, status e categoria
+3. Abra um achado para ver recomendação, evidência e histórico
+4. Atualize status: **Aberto** → **Em correção** → **Resolvido** (ou **Aceito risco**)
 
-> Achados críticos geram notificação in-app (ícone de sino no topo).
+Achados críticos geram notificação in-app (ícone de sino).
 
 ---
 
-## 6. Dashboard de postura
+## 7. Dashboard de postura
 
 ### Visão global (`/dashboard` ou `/posture`)
 
 - Score médio de postura
 - Total de achados abertos
 - Gráficos consolidados
-- Lista de aplicações com atalho ao dashboard individual e **Exportar PDF**
+- Lista de aplicações com **Exportar PDF**
 
 ### Por aplicação (`/applications/:id/dashboard`)
 
-- Score de postura da última análise concluída
+- Score da última análise concluída
 - Gráficos por severidade e categoria
-- Taxa de resolução de achados
+- Taxa de resolução
 - Histórico de análises
-- Botão **Exportar PDF**
+- **Exportar PDF**
 
 ---
 
-## 7. Relatório PDF
+## 8. Relatório PDF
 
-O relatório pode ser exportado em:
+Exportação disponível em:
 
-- **Dashboard global** — botão PDF por aplicação na lista
+- **Dashboard global** — por aplicação na lista
 - **Detalhe da aplicação** — botão **Exportar PDF**
 - **Dashboard da aplicação** — botão **Exportar PDF**
 
-O arquivo inclui:
-
-- Resumo executivo (score, achados, taxa de resolução)
-- Distribuição por severidade
-- Plano de ação priorizado com recomendações
+Conteúdo: resumo executivo, severidade, plano de ação priorizado.
 
 ---
 
-## 8. Administração (perfil admin)
+## 9. Administração (perfil admin)
 
 | Função | Caminho |
 |---|---|
+| Painel administrativo | `/admin` |
 | Gerenciar usuários e papéis | `/admin/users` |
-| Ajustar severidade sugerida dos itens OWASP | `/admin/checklist-items` |
+| Ajustar severidade dos itens OWASP | `/admin/checklist-items` |
+| **Análises globais e benchmark** | `/admin/analyses` |
+| Configurar **seu** assistente IA | `/profile/ai-assistant` |
+
+### Análises globais (`/admin/analyses`)
+
+Visão de **todas as análises de todos os usuários**:
+
+| Recurso | Uso |
+|---|---|
+| Tabela completa | Executor, aplicação, dono, **modelo IA**, postura, status |
+| Filtro por aplicação / URL | Barra superior |
+| Filtro por coluna | Campos abaixo de cada cabeçalho |
+| Redimensionar colunas | Arrastar borda direita do cabeçalho |
+| Seleção múltipla | Checkbox em cada linha |
+| **Comparar** | Com 2+ selecionadas — gráfico de postura (%) |
+| Benchmark automático | Agrupa análises com a **mesma URL base** |
+
+A coluna **Modelo IA** exibe o modelo **cadastrado pelo usuário que executou** a análise (ex.: `Google Gemini (gemini-2.0-flash)`).
 
 ---
 
-## 9. Papéis de usuário
+## 10. Papéis de usuário
 
 | Papel | Permissões |
 |---|---|
-| **user** | Suas aplicações, análises, achados e relatórios |
-| **security-analyst** | Igual ao user (extensível em versões futuras) |
-| **admin** | Acesso a todas as aplicações + painel administrativo |
+| **user** | Suas aplicações, análises, achados, relatórios e config IA pessoal |
+| **security-analyst** | Igual ao `user` (extensível em versões futuras) |
+| **admin** | Todas as aplicações e análises + painel admin + benchmark global |
+
+Admin pode abrir análises e aplicações de outros usuários (somente leitura operacional no fluxo de análise).
 
 ---
 
-## 10. Solução de problemas
+## 11. Solução de problemas
 
 | Problema | Ação |
 |---|---|
 | API não responde | Verifique `pnpm dev` e `DATABASE_URL` no `.env` |
 | Checklist vazio | Execute `pnpm db:setup` |
-| Botões de análise desabilitados | Cadastre URL base e/ou repositório Git na aplicação |
-| Clone Git falha | Use repositório **público HTTPS**; evite URLs malformadas ou duplicadas |
-| Assistente IA sem respostas | Confirme URL/repo acessíveis; sem `OPENAI_API_KEY` usa heurísticas |
-| Score aparece como "—" | Conclua uma análise com todos os 24 itens respondidos |
-| PDF não baixa | Verifique permissões do navegador para downloads |
+| Botões de análise desabilitados | Cadastre URL base e/ou repositório Git |
+| Clone Git falha | Use repositório **público HTTPS** |
+| Assistente IA sem LLM | Configure em **Perfil → Assistente IA**; teste a conexão |
+| Erro HTTP 429 no teste | Cota excedida — adicione créditos ou troque provedor |
+| Modelo IA "Não configurado" | Salve config em `/profile/ai-assistant` |
+| Gráfico comparativo não aparece | Selecione 2+ análises → botão **Comparar** |
+| Score "—" | Conclua análise com todos os 24 itens |
+| PDF não baixa | Permissões de download do navegador |
 
-Documentação complementar: [DEMO.md](DEMO.md) · [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md)
+---
+
+## 12. Demonstração e relatórios
+
+| Documento | Conteúdo |
+|---|---|
+| [DEMO.md](DEMO.md) | Roteiro de apresentação (~18–22 min) |
+| [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md) | Relatório técnico da Entrega 3 |
+| [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md) | Relatório da Entrega 2 (base estrutural) |
+| [APRESENTACAO.md](APRESENTACAO.md) | Roteiro de slides |

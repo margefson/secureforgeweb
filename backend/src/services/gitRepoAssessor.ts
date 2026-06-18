@@ -5,6 +5,14 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { AutoAssessmentSuggestion } from "./checklistAssessor.js";
 import type { ComplianceValue } from "../models/analyses.db.js";
+import {
+  buildGitScanSummaryArtifact,
+  buildTextArtifact,
+  findCodeArtifact,
+  ITEM_CODE_EVIDENCE_PATTERNS,
+  mergeArtifacts,
+  type AssessmentEvidenceArtifact,
+} from "./assessmentEvidence.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -245,15 +253,8 @@ function buildScanContext(snapshot: GitRepositorySnapshot): ScanContext {
   };
 }
 
-function findEvidence(pattern: RegExp, ctx: ScanContext, maxLen = 160): string | null {
-  for (const file of ctx.files) {
-    const match = file.content.match(pattern);
-    if (match) {
-      const snippet = match[0].replace(/\s+/g, " ").trim();
-      return `${file.path}: ${snippet.slice(0, maxLen)}`;
-    }
-  }
-  return null;
+function findEvidence(pattern: RegExp, ctx: ScanContext, title?: string): string | null {
+  return findCodeArtifact(pattern, ctx.files, title).evidence;
 }
 
 function countMatches(pattern: RegExp, ctx: ScanContext): number {
@@ -264,9 +265,29 @@ function result(
   compliance: ComplianceValue,
   confidence: number,
   evidence: string,
-  rationale: string
+  rationale: string,
+  artifacts?: AssessmentEvidenceArtifact[]
 ): AssessmentResult {
-  return { compliance, confidence, evidence, rationale, source: "auto" };
+  return { compliance, confidence, evidence, rationale, source: "auto", artifacts };
+}
+
+function enrichGitAssessment(
+  snapshot: GitRepositorySnapshot,
+  itemCode: string,
+  assessed: AssessmentResult
+): AssessmentResult {
+  const ctx = buildScanContext(snapshot);
+  const pattern = ITEM_CODE_EVIDENCE_PATTERNS[itemCode];
+  const { artifact } = pattern
+    ? findCodeArtifact(pattern, ctx.files, `Evidência de código — ${itemCode}`)
+    : { artifact: null };
+
+  const artifacts = mergeArtifacts(
+    [buildGitScanSummaryArtifact(snapshot)],
+    artifact ? [artifact] : [buildTextArtifact("Resultado da análise estática", assessed.evidence)]
+  );
+
+  return { ...assessed, artifacts };
 }
 
 function assessGitItem(code: GitAssessmentItemCode, ctx: ScanContext): AssessmentResult {
@@ -623,10 +644,11 @@ export function assessGitRepositoryItems(
   for (const item of items) {
     if (!codeSet.has(item.code)) continue;
     const assessed = assessGitItem(item.code as GitAssessmentItemCode, ctx);
+    const enriched = enrichGitAssessment(snapshot, item.code, assessed);
     suggestions.push({
       itemId: item.id,
       itemCode: item.code,
-      ...assessed,
+      ...enriched,
     });
   }
 

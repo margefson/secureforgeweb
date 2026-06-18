@@ -1,12 +1,14 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   real,
   serial,
   text,
   timestamp,
+  unique,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -317,3 +319,74 @@ export const findingHistory = pgTable("finding_history", {
 });
 export type FindingHistory = typeof findingHistory.$inferSelect;
 export type InsertFindingHistory = typeof findingHistory.$inferInsert;
+
+// ─── Assistente IA por usuário ───────────────────────────────────────────────
+export const userAiAssistantConfigs = pgTable("user_ai_assistant_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 32 }).default("openai").notNull(),
+  apiKey: text("api_key").notNull(),
+  model: varchar("model", { length: 120 }).notNull(),
+  baseUrl: text("base_url").notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+export type UserAiAssistantConfig = typeof userAiAssistantConfigs.$inferSelect;
+export type InsertUserAiAssistantConfig = typeof userAiAssistantConfigs.$inferInsert;
+
+// ─── Registro de avaliações automáticas (benchmark admin) ─────────────────────
+export const analysisAssessmentRuns = pgTable("analysis_assessment_runs", {
+  id: serial("id").primaryKey(),
+  analysisId: integer("analysis_id")
+    .notNull()
+    .references(() => analyses.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  scope: varchar("scope", { length: 32 }).notNull(),
+  assessmentMode: varchar("assessment_mode", { length: 32 }),
+  provider: varchar("provider", { length: 120 }),
+  itemsAssessed: integer("items_assessed").default(0).notNull(),
+  contextSummary: text("context_summary"),
+  assessedAt: timestamp("assessed_at", { mode: "date" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+export type AnalysisAssessmentRun = typeof analysisAssessmentRuns.$inferSelect;
+export type InsertAnalysisAssessmentRun = typeof analysisAssessmentRuns.$inferInsert;
+
+// ─── Evidências por item de checklist (scanner / IA) ─────────────────────────
+export const analysisItemEvidence = pgTable(
+  "analysis_item_evidence",
+  {
+    id: serial("id").primaryKey(),
+    analysisId: integer("analysis_id")
+      .notNull()
+      .references(() => analyses.id, { onDelete: "cascade" }),
+    itemId: integer("item_id").notNull(),
+    scope: varchar("scope", { length: 32 }).notNull(),
+    source: varchar("source", { length: 16 }).notNull(),
+    compliance: complianceEnum("compliance").notNull(),
+    confidence: integer("confidence").notNull(),
+    evidence: text("evidence").notNull(),
+    rationale: text("rationale").notNull(),
+    artifacts: jsonb("artifacts").$type<unknown[]>().default([]).notNull(),
+    assessedAt: timestamp("assessed_at", { mode: "date" }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueItemScope: unique("analysis_item_evidence_unique").on(
+      table.analysisId,
+      table.itemId,
+      table.scope
+    ),
+  })
+);
+export type AnalysisItemEvidence = typeof analysisItemEvidence.$inferSelect;
+export type InsertAnalysisItemEvidence = typeof analysisItemEvidence.$inferInsert;

@@ -2,10 +2,10 @@
 
 **Disciplina:** Projeto Integrador — Desenvolvimento de Ferramentas de Segurança Aplicada  
 **Trilha:** 1 — AppHardener  
-**Versão:** 1.1  
-**Data:** 16/06/2026
+**Versão:** 1.2  
+**Data:** 30/06/2026
 
-> Para capacidades implementadas além do escopo original (análises automáticas assistidas), consulte [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md).
+> Para o **estado operacional atual** (Entrega 3), consulte [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md), [MANUAL.md](MANUAL.md) e [DEMO.md](DEMO.md). Este documento descreve a arquitetura alvo e requisitos; a implementação evoluiu com IA por usuário, admin benchmark e migrações `0015`–`0016`.
 
 ---
 

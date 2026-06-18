@@ -1,3 +1,5 @@
+> **Documento da Entrega 2 (16/06/2026).** Para o **estado atual** após a Entrega 3, consulte [RELATORIO_ENTREGA_3.md](./RELATORIO_ENTREGA_3.md), [MANUAL.md](./MANUAL.md) e [DEMO.md](./DEMO.md).
+
 # Relatório Técnico — Segunda Entrega
 
 **Disciplina:** Projeto Integrador — Desenvolvimento de Ferramentas de Segurança Aplicada  
@@ -139,7 +141,7 @@ O foco da **SecureForge Web** permanece o **hardening de aplicações web** por 
 
 | Item | Situação |
 |---|---|
-| LLM (assistente IA) | Requer `OPENAI_API_KEY`; fallback heurístico sem API |
+| LLM (assistente IA) | Na E2: via `.env` global — **na E3:** config por usuário em `/profile/ai-assistant` |
 | Assistente IA por item/categoria | Implementado; execuções independentes via `itemIds` |
 | Salvamento parcial no wizard | Implementado; auto-save ao trocar de categoria |
 | Repositórios Git privados (SSH) | Limitado; recomendado HTTPS público |

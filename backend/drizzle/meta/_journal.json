@@ -43,6 +43,20 @@
       "when": 1752451200000,
       "tag": "0014_posturaweb_phase6b",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1753056000000,
+      "tag": "0015_user_ai_assistant_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1754265600000,
+      "tag": "0017_analysis_item_evidence",
+      "breakpoints": true
     }
   ]
 }

@@ -3,28 +3,31 @@
 **Disciplina:** Projeto Integrador — Desenvolvimento de Ferramentas de Segurança Aplicada  
 **Trilha:** 1 — AppHardener  
 **Projeto base de referência:** [incident_security_system](https://github.com/margefson/incident_security_system) (Projeto 1)  
-**Versão:** 1.1  
-**Data:** 16/06/2026
+**Versão:** 1.2  
+**Data:** 30/06/2026
 
 ---
 
 ## Estado atual do sistema (referência rápida)
 
-> Este guia documenta o **cronograma histórico** de implementação. Para o **estado operacional atual**, consulte [RELATORIO_ENTREGA_2.md](RELATORIO_ENTREGA_2.md) e [MANUAL.md](MANUAL.md).
+> Este guia documenta o **cronograma histórico** de implementação. Para o **estado operacional atual (Entrega 3)**, consulte [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md), [MANUAL.md](MANUAL.md) e [DEMO.md](DEMO.md).
 
 | Capacidade | Status |
 |---|---|
+| Fluxo principal ponta a ponta | Concluído |
 | Cadastro de aplicações (URL e/ou repo Git) | Concluído |
 | Checklist OWASP v1.0 (24 itens) | Concluído |
 | Wizard com salvamento parcial | Concluído |
 | Análises automáticas (HTTP, Git, IA) | Concluído |
-| Assistente IA por categoria e por item | Concluído |
+| Assistente IA **por usuário** (perfil) | Concluído — Entrega 3 |
+| Admin — análises globais + benchmark | Concluído — Entrega 3 |
 | Achados, dashboard, PDF | Concluído |
 | Admin (usuários, checklist) | Concluído |
+| Migrações Drizzle | `0000`–`0016` |
 
 **Comandos:** `pnpm db:setup` · `pnpm dev` · `pnpm test` · `pnpm check`
 
-**Demonstração:** [DEMO.md](DEMO.md)
+**Demonstração:** [DEMO.md](DEMO.md) · **Relatório:** [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)
 
 ---
 
@@ -427,6 +430,26 @@ incident_security_system  →  fork  →  posturaweb
 **Critério de aceite:** Protótipo demonstrável ponta a ponta; documentação completa; testes passando.
 
 > **Status Fase 5:** Concluída em 16/06/2026. `security.test.ts` adaptado, admin checklist, notificações de achados críticos, `MANUAL.md`, `DEMO.md`, `APRESENTACAO.md`, limpeza de docs legados.
+
+---
+
+### Fase 6 — Consolidação do fluxo principal (Entrega 3)
+
+**Objetivo:** Núcleo funcional multiusuário, IA por perfil, governança admin.
+
+| # | Tarefa | Entregável |
+|---|---|---|
+| 6.1 | Tabela `user_ai_assistant_configs` | Migração `0015` |
+| 6.2 | Router `aiAssistant` (config por usuário) | `/profile/ai-assistant` |
+| 6.3 | `runAiAgentAssessment` com `userId` | IA do executor |
+| 6.4 | Tabela `analysis_assessment_runs` | Migração `0016` |
+| 6.5 | `admin.listAnalyses` — visão global | `/admin/analyses` |
+| 6.6 | Benchmark: filtros, resize, gráfico comparativo | `AdminAnalyses.tsx` |
+| 6.7 | Documentação Entrega 3 | `RELATORIO_ENTREGA_3.md`, `MANUAL.md`, `DEMO.md` |
+
+**Critério de aceite:** Dois usuários com modelos IA distintos executam análises; admin compara postura em gráfico; fluxo principal demonstrável ponta a ponta.
+
+> **Status Fase 6:** Concluída em 30/06/2026. Ver [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md).
 
 ---
 

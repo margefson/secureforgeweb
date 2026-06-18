@@ -1,6 +1,8 @@
 # Roteiro de Demonstração — SecureForge Web
 
-Roteiro para apresentação acadêmica (~15–18 minutos). Use uma aplicação de laboratório fictícia ou um repositório público real para as análises automáticas.
+Roteiro para apresentação acadêmica da **Entrega 3** (~18–22 minutos). Use uma aplicação de laboratório fictícia ou um repositório público real para as análises automáticas.
+
+Relatório desta entrega: [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)
 
 ---
 
@@ -22,8 +24,11 @@ Acesse: **http://localhost:5173**
 | Item | Detalhe |
 |---|---|
 | Conta demo | Crie em **Criar Conta** (ex.: `demo@secureforgeweb.local`) ou use usuário existente |
-| Assistente IA (LLM) | Opcional — configure `OPENAI_API_KEY` no `.env`. Sem chave, o assistente usa heurísticas locais |
+| Assistente IA (LLM) | Configure em **Perfil → Configurar Assistente IA** (chave e modelo **por usuário**, não no `.env`) |
+| Conta admin | Necessária para a etapa de benchmark — promova um usuário em `/admin/users` |
 | Análises automáticas | Exigem **URL base** e/ou **repositório Git** cadastrados na aplicação |
+
+> **Entrega 3:** cada operador usa **seu próprio** provedor/modelo (OpenAI, Gemini, Azure ou custom). Vários usuários podem trabalhar simultaneamente com configurações diferentes.
 
 ---
 
@@ -39,116 +44,153 @@ Acesse: **http://localhost:5173**
 
 > Pelo menos **URL base** ou **repositório Git** é obrigatório no cadastro — ideal preencher ambos para demonstrar todas as análises automáticas.
 
+### Cenário multiusuário (benchmark — opcional, recomendado)
+
+| Usuário | Modelo sugerido | Papel |
+|---|---|---|
+| Operador A | OpenAI — `gpt-4o-mini` | `user` |
+| Operador B | Google Gemini — `gemini-2.0-flash` | `user` |
+| Coordenador | — | `admin` |
+
+Ambos analisam a **mesma URL base** (aplicações distintas ou mesma app, conforme o roteiro). O admin compara postura e modelos em **Análises globais**.
+
 ---
 
-## Roteiro (15–18 min)
+## Roteiro (18–22 min)
 
 ### 1. Landing e contexto (2 min)
 
 - Abrir `/` — apresentar proposta da Trilha 1 **AppHardener**
-- Destacar o fluxo: **aplicação → checklist OWASP → achados → hardening → dashboard → PDF**
+- Destacar o fluxo consolidado: **config IA pessoal → aplicação → checklist → achados → postura → PDF**
 - Fazer **login** e mostrar o menu: Dashboard, Aplicações, Postura de Segurança
 
-### 2. Cadastro da aplicação (2 min)
+### 2. Configurar assistente IA pessoal (2 min) — *novo na Entrega 3*
+
+1. **Perfil** (menu do usuário) → **Configurar Assistente IA** (`/profile/ai-assistant`)
+2. Selecionar provedor (ex.: **OpenAI** ou **Google Gemini**)
+3. Informar **chave de API** e **modelo**
+4. Clicar **Testar conexão** → **Salvar configuração**
+5. Enfatizar: *“Esta configuração é só minha — outro usuário logado pode usar outro modelo.”*
+
+> Sem chave configurada, o assistente usa **heurísticas locais**; com chave válida, usa **LLM** do provedor escolhido.
+
+### 3. Cadastro da aplicação (2 min)
 
 - **Aplicações → Nova Aplicação**
 - Preencher dados do Portal Acadêmico Lab (incluindo URL e repositório Git)
 - Salvar — abrir o **detalhe da aplicação**
 - Mostrar atalhos: **Iniciar análise**, **Dashboard de postura**, **Exportar PDF**, **Ver achados**
 
-### 3. Wizard de checklist e análises automáticas (7 min)
+### 4. Wizard de checklist e análises automáticas (7 min)
 
 - Clicar em **Iniciar análise**
 - Apresentar as **9 categorias OWASP** (24 itens) e a barra de progresso geral
 
-#### 3.1 Análises por categoria (independentes)
-
-Em cada categoria, os botões aparecem conforme o tipo de item:
+#### 4.1 Análises por categoria (independentes)
 
 | Botão | Quando aparece | O que faz |
 |---|---|---|
 | **Analisar headers HTTP** | Categoria com itens de headers/HTTPS | Pré-preenche via fetch passivo da URL base |
 | **Analisar repositório Git** | Categoria com itens de código (AUTH, INPUT, etc.) | Pré-preenche via clone + heurísticas estáticas |
-| **Assistente IA (categoria)** | Sempre (se houver URL ou repo) | Sugere conformidade para todos os itens da categoria |
+| **Assistente IA (categoria)** | Sempre (se houver URL ou repo) | Usa o **modelo cadastrado pelo usuário logado** |
 
 **Demonstrar ao vivo:**
 
-1. Abrir **Headers de segurança** → **Analisar headers HTTP** → revisar sugestões com badge de confiança
-2. Abrir **Validação de entrada** → **Analisar repositório Git** → mostrar sugestão automática (ex.: INPUT-02)
-3. Abrir **Exposição de endpoints** → **Assistente IA (categoria)** → mostrar badge roxo **Sugestão IA**
+1. **Headers de segurança** → **Analisar headers HTTP** → revisar sugestões com badge de confiança
+2. **Validação de entrada** → **Analisar repositório Git** → sugestão automática (ex.: INPUT-02)
+3. **Exposição de endpoints** → **Assistente IA (categoria)** → badge roxo **Sugestão IA**
 
-#### 3.2 Assistente IA por item
+#### 4.2 Assistente IA por item
 
-- Em um item específico (ex.: `AUTH-02`), clicar **Assistente IA** no canto do card
-- Explicar que cada item pode ser analisado **isoladamente**, sem afetar os demais
+- Em um item (ex.: `AUTH-02`), clicar **Assistente IA** no card
+- Explicar execução **isolada por item**, sem afetar os demais
 
-#### 3.3 Revisão humana e salvamento
+#### 4.3 Revisão humana e salvamento
 
 - Enfatizar: *“A sugestão não substitui validação humana — o analista confirma ou ajusta.”*
-- Ajustar manualmente 2–3 itens, por exemplo:
-  - `AUTH-02` — **Não conforme** (senhas em texto plano)
-  - `HEADER-01` — **Parcial** (CSP incompleto)
-  - `INPUT-02` — **Conforme** (queries parametrizadas)
-- Mostrar **Salvar categoria** (salva respostas parciais)
-- Trocar de aba (ex.: Autenticação → Headers) — respostas salvas automaticamente ao mudar de categoria
-- Percorrer mais 1–2 categorias; usar **Salvar e continuar** quando a categoria estiver completa
-- No resumo final, clicar **Concluir e gerar achados**
+- Ajustar manualmente 2–3 itens (ex.: AUTH-02 não conforme, HEADER-01 parcial)
+- **Salvar categoria** → trocar de aba (auto-save) → **Salvar e continuar**
+- **Concluir e gerar achados**
 
-### 4. Achados e hardening (3 min)
+### 5. Achados e hardening (2 min)
 
-- Redirecionamento para **lista de achados** da aplicação
-- Filtrar por severidade ou status
-- Abrir achado **crítico/alto** — mostrar recomendação de hardening e evidência
-- Alterar status para **Em correção**
-- Se achado for crítico, mostrar **notificação** (ícone de sino no topo)
+- Lista de **achados** da aplicação — filtrar por severidade
+- Abrir achado crítico/alto — recomendação e evidência
+- Alterar status para **Em correção** — notificação no sino (se crítico)
 
-### 5. Dashboard e PDF (3 min)
+### 6. Dashboard e PDF (2 min)
 
-- Abrir **Dashboard de postura** da aplicação (`/applications/:id/dashboard`)
-- Explicar **score de conformidade**, gráficos por severidade/categoria e taxa de resolução
-- Clicar **Exportar PDF** — abrir arquivo e mostrar resumo executivo + plano de ação
-- Opcional: no **Dashboard global** (`/dashboard`), exportar PDF de outra aplicação da lista
+- **Dashboard de postura** (`/applications/:id/dashboard`) — score e gráficos
+- **Exportar PDF** — mostrar resumo executivo no arquivo baixado
 
-### 6. Encerramento (1 min)
+### 7. Admin — análises globais e benchmark (3–4 min) — *Entrega 3*
 
-- Visão consolidada em **Postura de Segurança** / Dashboard global
-- Se perfil **admin**: mencionar gestão de usuários e itens OWASP em `/admin`
-- Fechar reforçando alinhamento OWASP/ASVS e revisão humana das sugestões automáticas
+*Requer perfil **admin**. Ideal após dois operadores terem concluído análises.*
+
+1. **Painel Admin** → **Análises globais** (`/admin/analyses`)
+2. Mostrar tabela com **todas as análises** (executor, aplicação, **Modelo IA**, postura, status)
+3. **Filtrar** por coluna (ex.: nome do executor ou modelo)
+4. **Redimensionar colunas** arrastando a borda do cabeçalho
+5. Marcar **2 ou mais** análises (checkbox) → **Comparar**
+6. Exibir **gráfico de barras** com postura (%) por análise
+7. Se houver mesma URL base em apps distintas, destacar seção **Benchmark — mesma URL base**
+
+> Evidência para banca: coluna **Modelo IA** com `OpenAI (GPT) (gpt-4o-mini)` vs `Google Gemini (gemini-2.0-flash)`.
+
+### 8. Encerramento (1 min)
+
+- Reforçar: fluxo principal funcional, multiusuário, revisão humana, OWASP/ASVS
+- Mencionar admin: usuários, checklist OWASP, análises globais
+- Referência: [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)
 
 ---
 
 ## Itens para destacar na banca
 
-1. Checklist OWASP v1.0 — **24 itens em 9 categorias**, referências ASVS
-2. **Análises automáticas** em três modalidades: headers HTTP, repositório Git e assistente IA
-3. IA **por categoria e por item**, executável de forma independente
-4. Salvamento **parcial** e navegação livre entre categorias sem perda de dados
-5. Geração automática de **achados** a partir de não conformidades
-6. **Recomendações de hardening** vinculadas ao catálogo OWASP
-7. **Score de postura** calculado objetivamente + **relatório PDF** exportável
-8. Controles de segurança da plataforma (bcrypt, IDOR, rate limit, Helmet)
+1. **Fluxo principal consolidado** ponta a ponta (Entrega 3)
+2. Checklist OWASP v1.0 — **24 itens / 9 categorias**
+3. **Assistente IA por usuário** — OpenAI, Gemini, Azure, custom
+4. Análises automáticas: HTTP, Git e IA **por categoria e por item**
+5. Salvamento parcial e navegação livre no wizard
+6. Achados, recomendações e **score de postura**
+7. **Relatório PDF** exportável
+8. **Admin:** visão global, filtro por coluna, **comparativo gráfico** entre análises/modelos
+9. Segurança da plataforma (bcrypt, RBAC, isolamento por usuário)
 
 ---
 
-## Roteiro alternativo (demo rápida — 8 min)
+## Roteiro alternativo (demo rápida — 10 min)
 
-1. Login → cadastrar aplicação com URL + repo (1 min)
-2. Wizard: 1 análise Git + 1 assistente IA por categoria + revisão manual (3 min)
-3. Concluir → achados → alterar status (2 min)
-4. Dashboard + PDF (2 min)
+1. Login → **Configurar Assistente IA** no perfil (1 min)
+2. Cadastrar aplicação com URL + repo (1 min)
+3. Wizard: 1 Git + 1 IA por categoria + revisão (3 min)
+4. Concluir → achados (1 min)
+5. Dashboard + PDF (2 min)
+6. *(Admin)* Análises globais → selecionar 2 linhas → Comparar (2 min)
+
+---
+
+## Roteiro benchmark multiusuário (complementar — 5 min)
+
+1. Operador A: config OpenAI → análise completa → anotar postura %
+2. Operador B: config Gemini → mesma URL base → análise completa
+3. Admin: **Análises globais** → filtrar → comparar gráfico
+4. Print ou gravação da tela para evidência AVA
 
 ---
 
 ## Checklist pré-demo
 
 - [ ] PostgreSQL rodando e `DATABASE_URL` no `.env`
-- [ ] `pnpm db:setup` executado (checklist seed com 24 itens)
+- [ ] `pnpm db:setup` executado (migrações até `0016`, checklist 24 itens)
 - [ ] `pnpm dev` ativo (frontend :5173, backend :3000)
-- [ ] Conta criada e login testado
-- [ ] Aplicação demo cadastrada com **URL base** e **repositório Git** público
-- [ ] *(Opcional)* `OPENAI_API_KEY` configurada para modo LLM do assistente IA
-- [ ] Navegador em tela limpa (sem abas irrelevantes)
-- [ ] Download de PDF testado uma vez antes da apresentação
+- [ ] Conta operador criada e login testado
+- [ ] **Assistente IA configurado no Perfil** (chave + teste de conexão)
+- [ ] *(Benchmark)* Segunda conta + conta **admin**
+- [ ] Aplicação demo com **URL base** e **repositório Git** público
+- [ ] Análise concluída ao menos uma vez (para score e PDF)
+- [ ] *(Admin)* Tela `/admin/analyses` e gráfico comparativo testados
+- [ ] Download de PDF testado antes da apresentação
 
 ---
 
@@ -156,10 +198,14 @@ Em cada categoria, os botões aparecem conforme o tipo de item:
 
 | Situação | Ação |
 |---|---|
-| Botões de análise desabilitados | Verifique URL base e/ou repositório Git no cadastro da aplicação |
-| Clone Git falha | Use repositório **público HTTPS**; evite URLs duplicadas no campo |
-| Assistente IA sem respostas | Confirme URL ou repo acessíveis; sem `OPENAI_API_KEY` usa heurísticas |
-| Score aparece como "—" | Conclua uma análise com **todos** os 24 itens respondidos |
+| Botões de análise desabilitados | Cadastre URL base e/ou repositório Git na aplicação |
+| Clone Git falha | Use repositório **público HTTPS** |
+| Assistente IA sem respostas LLM | Configure chave em **Perfil → Assistente IA**; teste conexão |
+| HTTP 429 no teste de conexão | Conta sem crédito — troque provedor (ex.: Gemini) ou use heurístico |
+| Coluna Modelo IA com "Não configurado" | Usuário ainda não salvou config em `/profile/ai-assistant` |
+| Gráfico comparativo vazio | Selecione **2+** análises com checkbox → **Comparar** |
+| Score aparece como "—" | Conclua análise com **todos** os 24 itens respondidos |
 | PDF não baixa | Verifique permissões de download do navegador |
+| Admin não vê todas as apps | Confirme papel `admin` em `/admin/users` |
 
-Apresentação em slides: [APRESENTACAO.md](APRESENTACAO.md) · Manual completo: [MANUAL.md](MANUAL.md)
+Apresentação em slides: [APRESENTACAO.md](APRESENTACAO.md) · Manual completo: [MANUAL.md](MANUAL.md) · Relatório: [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)

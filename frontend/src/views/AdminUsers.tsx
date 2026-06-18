@@ -139,15 +139,32 @@ export default function AdminUsers() {
   const analystCount = users?.filter((u) => u.role === "security-analyst").length ?? 0;
   const userCount = users?.filter((u) => u.role === "user").length ?? 0;
 
-  // Helper: next promotion target for a user
-  const getPromoteAction = (u: UserRow): { label: string; newRole: UserRole; className: string } | null => {
+  // Ações de promoção (usuário pode ir direto para admin ou passar por analyst)
+  const getPromoteActions = (u: UserRow): Array<{ label: string; newRole: UserRole; className: string }> => {
     if (u.role === "user") {
-      return { label: "→ Analyst", newRole: "security-analyst", className: "h-7 text-xs font-mono border-blue-400/30 text-blue-400 hover:bg-blue-400/10" };
+      return [
+        {
+          label: "→ Analyst",
+          newRole: "security-analyst",
+          className: "h-7 text-xs font-mono border-blue-400/30 text-blue-400 hover:bg-blue-400/10",
+        },
+        {
+          label: "→ Admin",
+          newRole: "admin",
+          className: "h-7 text-xs font-mono border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10",
+        },
+      ];
     }
     if (u.role === "security-analyst") {
-      return { label: "→ Admin", newRole: "admin", className: "h-7 text-xs font-mono border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10" };
+      return [
+        {
+          label: "→ Admin",
+          newRole: "admin",
+          className: "h-7 text-xs font-mono border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10",
+        },
+      ];
     }
-    return null; // admin cannot be promoted further
+    return [];
   };
 
   const getDemoteAction = (u: UserRow): { label: string; newRole: UserRole; className: string } | null => {
@@ -203,11 +220,11 @@ export default function AdminUsers() {
             Hierarquia de Perfis
           </p>
           <div className="flex flex-wrap gap-4 text-xs font-mono text-muted-foreground">
-            <span><span className="text-muted-foreground font-semibold">Usuário</span> — Abre e visualiza incidentes</span>
+            <span><span className="text-muted-foreground font-semibold">Usuário</span> — Aplicações, análises e achados próprios</span>
             <span className="text-muted-foreground">→</span>
-            <span><span className="text-blue-400 font-semibold">Security Analyst</span> — Muda status (Em Andamento / Concluído), reclassifica</span>
+            <span><span className="text-blue-400 font-semibold">Security Analyst</span> — Revisão AppSec (mesmo escopo do usuário)</span>
             <span className="text-muted-foreground">→</span>
-            <span><span className="text-yellow-400 font-semibold">Admin</span> — Acesso total, gerencia usuários e ML</span>
+            <span><span className="text-yellow-400 font-semibold">Admin</span> — Acesso total, gerencia usuários, checklist e assistente IA</span>
           </div>
         </div>
 
@@ -240,7 +257,7 @@ export default function AdminUsers() {
                   </tr>
                 ) : (
                   (users as UserRow[]).map((u) => {
-                    const promoteAction = getPromoteAction(u);
+                    const promoteActions = getPromoteActions(u);
                     const demoteAction = getDemoteAction(u);
                     return (
                       <tr key={u.id} className="hover:bg-muted/10 transition-colors">
@@ -301,17 +318,18 @@ export default function AdminUsers() {
                                 >
                                   <KeyRound className="w-3.5 h-3.5" />
                                 </Button>
-                                {promoteAction && (
+                                {promoteActions.map((action) => (
                                   <Button
+                                    key={action.newRole}
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setRoleTarget({ user: u, newRole: promoteAction.newRole })}
-                                    className={promoteAction.className}
-                                    title={`Promover para ${roleLabel(promoteAction.newRole)}`}
+                                    onClick={() => setRoleTarget({ user: u, newRole: action.newRole })}
+                                    className={action.className}
+                                    title={`Alterar para ${roleLabel(action.newRole)}`}
                                   >
-                                    {promoteAction.label}
+                                    {action.label}
                                   </Button>
-                                )}
+                                ))}
                                 {demoteAction && (
                                   <Button
                                     variant="outline"
@@ -352,7 +370,7 @@ export default function AdminUsers() {
             <span className="text-primary font-semibold">Nota:</span>{" "}
             A senha padrão de reset é{" "}
             <span className="text-yellow-400 font-semibold">Security2026@</span> — oriente o usuário a alterá-la no primeiro acesso.
-            A exclusão de um usuário remove permanentemente todos os seus incidentes e histórico.
+            A exclusão de um usuário remove permanentemente suas aplicações, análises e achados.
           </p>
         </div>
       </div>
@@ -481,12 +499,12 @@ export default function AdminUsers() {
               </span>?
               {roleTarget?.newRole === "security-analyst" && (
                 <span className="block mt-1 text-xs">
-                  O usuário poderá alterar o status de incidentes (Em Andamento / Concluído) e reclassificar categorias.
+                  O usuário passará a ter o perfil Security Analyst (revisor AppSec).
                 </span>
               )}
               {roleTarget?.newRole === "admin" && (
                 <span className="block mt-1 text-xs text-yellow-400">
-                  Atenção: este usuário terá acesso total ao painel admin, incluindo gerenciamento de usuários e ML.
+                  Atenção: este usuário terá acesso total ao painel admin, incluindo gerenciamento de usuários, checklist OWASP e assistente IA.
                 </span>
               )}
             </AlertDialogDescription>

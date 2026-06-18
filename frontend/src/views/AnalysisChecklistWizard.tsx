@@ -42,6 +42,12 @@ import {
 
 } from "lucide-react";
 
+import SuggestionEvidenceDialog, {
+  EvidenceIconButton,
+  type SuggestionEvidenceEntry,
+} from "@/components/SuggestionEvidenceDialog";
+import type { AssessmentEvidenceArtifact } from "@/lib/assessmentEvidence";
+
 
 
 type Compliance = "conforme" | "parcial" | "nao_conforme" | "nao_aplicavel";
@@ -51,6 +57,10 @@ type AutoSuggestionMeta = {
   evidence: string;
   rationale: string;
   source?: "auto" | "ai";
+  scope?: AssessmentScope;
+  compliance?: Compliance;
+  artifacts?: AssessmentEvidenceArtifact[];
+  assessedAt?: string;
 };
 
 type AssessmentScope = "http_headers" | "git_repo" | "ai_agent";
@@ -137,6 +147,14 @@ export default function AnalysisChecklistWizard() {
 
   const [autoMeta, setAutoMeta] = useState<Record<number, AutoSuggestionMeta>>({});
 
+  const [itemEvidenceMap, setItemEvidenceMap] = useState<Record<number, SuggestionEvidenceEntry[]>>({});
+
+  const [evidenceDialogItem, setEvidenceDialogItem] = useState<{
+    id: number;
+    code: string;
+    title: string;
+  } | null>(null);
+
   const [showSummary, setShowSummary] = useState(false);
 
   const [lastSuggestedCount, setLastSuggestedCount] = useState(0);
@@ -211,6 +229,52 @@ export default function AnalysisChecklistWizard() {
 
     if (wizard.analysis.status === "concluida") setShowSummary(true);
 
+    if (wizard.itemEvidence?.length) {
+      const grouped: Record<number, SuggestionEvidenceEntry[]> = {};
+      for (const row of wizard.itemEvidence) {
+        const entry: SuggestionEvidenceEntry = {
+          scope: row.scope as AssessmentScope,
+          source: row.source as "auto" | "ai",
+          confidence: row.confidence,
+          compliance: row.compliance,
+          evidence: row.evidence,
+          rationale: row.rationale,
+          artifacts: (row.artifacts as AssessmentEvidenceArtifact[]) ?? [],
+          assessedAt: row.assessedAt ? new Date(row.assessedAt).toISOString() : undefined,
+        };
+        if (!grouped[row.itemId]) grouped[row.itemId] = [];
+        const existing = grouped[row.itemId].findIndex((e) => e.scope === entry.scope);
+        if (existing >= 0) grouped[row.itemId][existing] = entry;
+        else grouped[row.itemId].push(entry);
+      }
+      setItemEvidenceMap(grouped);
+
+      setAutoMeta((prev) => {
+        const next = { ...prev };
+        for (const [itemIdStr, entries] of Object.entries(grouped)) {
+          const itemId = Number(itemIdStr);
+          const latest = [...entries].sort((a, b) => {
+            const ta = a.assessedAt ? Date.parse(a.assessedAt) : 0;
+            const tb = b.assessedAt ? Date.parse(b.assessedAt) : 0;
+            return tb - ta;
+          })[0];
+          if (latest && !prev[itemId]) {
+            next[itemId] = {
+              confidence: latest.confidence,
+              evidence: latest.evidence,
+              rationale: latest.rationale,
+              source: latest.source,
+              scope: latest.scope,
+              compliance: latest.compliance as Compliance | undefined,
+              artifacts: latest.artifacts,
+              assessedAt: latest.assessedAt,
+            };
+          }
+        }
+        return next;
+      });
+    }
+
   }, [wizard]);
 
 
@@ -278,6 +342,7 @@ export default function AnalysisChecklistWizard() {
           evidence: string;
           rationale: string;
           source?: "auto" | "ai";
+          artifacts?: AssessmentEvidenceArtifact[];
         }>;
         assessmentMode?: string;
         filesScanned?: number;
@@ -286,6 +351,7 @@ export default function AnalysisChecklistWizard() {
       itemCount: number
     ) => {
       const meta: Record<number, AutoSuggestionMeta> = {};
+      const evidenceUpdates: Record<number, SuggestionEvidenceEntry[]> = {};
 
       setLocalResponses((prev) => {
         const next = { ...prev };
@@ -303,18 +369,51 @@ export default function AnalysisChecklistWizard() {
             notes: `[${label} · ${suggestion.confidence}%]\n${suggestion.evidence}\n\n${suggestion.rationale}`,
           };
 
+          const assessedAt = new Date().toISOString();
           meta[suggestion.itemId] = {
             confidence: suggestion.confidence,
             evidence: suggestion.evidence,
             rationale: suggestion.rationale,
             source: suggestion.source,
+            scope: result.scope,
+            compliance: suggestion.compliance as Compliance,
+            artifacts: suggestion.artifacts,
+            assessedAt,
           };
+
+          evidenceUpdates[suggestion.itemId] = [
+            {
+              scope: result.scope,
+              source: suggestion.source,
+              confidence: suggestion.confidence,
+              compliance: suggestion.compliance,
+              evidence: suggestion.evidence,
+              rationale: suggestion.rationale,
+              artifacts: suggestion.artifacts,
+              assessedAt,
+            },
+          ];
         }
 
         return next;
       });
 
       setAutoMeta((prev) => ({ ...prev, ...meta }));
+
+      setItemEvidenceMap((prev) => {
+        const next = { ...prev };
+        for (const [itemIdStr, entries] of Object.entries(evidenceUpdates)) {
+          const itemId = Number(itemIdStr);
+          const existing = [...(next[itemId] ?? [])];
+          for (const entry of entries) {
+            const idx = existing.findIndex((e) => e.scope === entry.scope);
+            if (idx >= 0) existing[idx] = entry;
+            else existing.push(entry);
+          }
+          next[itemId] = existing;
+        }
+        return next;
+      });
 
       if (result.suggestions.length === 0) {
         toast.message("Nenhuma sugestão gerada para a seleção atual.");
@@ -345,6 +444,7 @@ export default function AnalysisChecklistWizard() {
 
     onSuccess: (result, vars) => {
       applyAutoSuggestions(result, vars.itemIds?.length ?? result.suggestions.length);
+      utils.analyses.getWizard.invalidate({ id: analysisId });
     },
 
     onError: (e) => toast.error(e.message),
@@ -1074,11 +1174,25 @@ export default function AnalysisChecklistWizard() {
 
                   <div className="flex flex-col items-end gap-2 shrink-0">
 
-                    <Badge variant="outline" className={`font-mono text-xs ${SEVERITY_COLORS[item.suggestedSeverity] ?? ""}`}>
+                    <div className="flex items-center gap-1">
+                      {(itemEvidenceMap[item.id]?.length ?? 0) > 0 && (
+                        <EvidenceIconButton
+                          onClick={() =>
+                            setEvidenceDialogItem({
+                              id: item.id,
+                              code: item.code,
+                              title: item.title,
+                            })
+                          }
+                        />
+                      )}
 
-                      {item.suggestedSeverity}
+                      <Badge variant="outline" className={`font-mono text-xs ${SEVERITY_COLORS[item.suggestedSeverity] ?? ""}`}>
 
-                    </Badge>
+                        {item.suggestedSeverity}
+
+                      </Badge>
+                    </div>
 
                     {!isCompleted && canRunAiAssessment && (
 
@@ -1118,31 +1232,34 @@ export default function AnalysisChecklistWizard() {
 
                 {autoMeta[item.id] && (
 
-                  <div className={`rounded-lg border p-3 space-y-1 ${autoMeta[item.id].source === "ai" ? "border-violet-500/25 bg-violet-500/5" : "border-cyan-500/25 bg-cyan-500/5"}`}>
+                  <div className={`rounded-lg border px-3 py-2.5 ${autoMeta[item.id].source === "ai" ? "border-violet-500/25 bg-violet-500/5" : "border-cyan-500/25 bg-cyan-500/5"}`}>
 
-                    <p className={`text-xs font-mono flex items-center gap-1.5 ${autoMeta[item.id].source === "ai" ? "text-violet-700 dark:text-violet-300" : "text-cyan-700 dark:text-cyan-300"}`}>
-
-                      {autoMeta[item.id].source === "ai" ? (
-
-                        <><Brain className="w-3.5 h-3.5" /> Sugestão IA · {autoMeta[item.id].confidence}% confiança</>
-
-                      ) : (
-
-                        <><Sparkles className="w-3.5 h-3.5" /> Sugestão automática · {autoMeta[item.id].confidence}% confiança</>
-
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-xs font-mono flex items-center gap-1.5 ${autoMeta[item.id].source === "ai" ? "text-violet-700 dark:text-violet-300" : "text-cyan-700 dark:text-cyan-300"}`}>
+                        {autoMeta[item.id].source === "ai" ? (
+                          <><Brain className="w-3.5 h-3.5 shrink-0" /> IA · {autoMeta[item.id].confidence}%</>
+                        ) : (
+                          <><Sparkles className="w-3.5 h-3.5 shrink-0" /> Auto · {autoMeta[item.id].confidence}%</>
+                        )}
+                      </p>
+                      {(itemEvidenceMap[item.id]?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          className="text-[10px] font-mono text-primary hover:underline shrink-0"
+                          onClick={() =>
+                            setEvidenceDialogItem({
+                              id: item.id,
+                              code: item.code,
+                              title: item.title,
+                            })
+                          }
+                        >
+                          Ver evidência
+                        </button>
                       )}
+                    </div>
 
-                    </p>
-
-                    <p className="text-xs text-muted-foreground">{autoMeta[item.id].evidence}</p>
-
-                    <p className="text-xs text-muted-foreground/80 italic">{autoMeta[item.id].rationale}</p>
-
-                    <p className="text-[11px] text-muted-foreground/70">
-
-                      Revise e confirme antes de salvar — a sugestão não substitui validação humana.
-
-                    </p>
+                    <p className="text-xs text-foreground/90 mt-1 line-clamp-2">{autoMeta[item.id].rationale}</p>
 
                   </div>
 
@@ -1281,6 +1398,16 @@ export default function AnalysisChecklistWizard() {
         </div>
 
       </div>
+
+      <SuggestionEvidenceDialog
+        open={evidenceDialogItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setEvidenceDialogItem(null);
+        }}
+        itemCode={evidenceDialogItem?.code ?? ""}
+        itemTitle={evidenceDialogItem?.title ?? ""}
+        entries={evidenceDialogItem ? itemEvidenceMap[evidenceDialogItem.id] ?? [] : []}
+      />
 
     </DashboardLayout>
 

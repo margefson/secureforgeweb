@@ -18,6 +18,8 @@ import AnalysisChecklistWizard from "@/views/AnalysisChecklistWizard";
 import Admin from "@/views/Admin";
 import AdminUsers from "@/views/AdminUsers";
 import AdminChecklistItems from "@/views/AdminChecklistItems";
+import AdminAiAssistant from "@/views/AdminAiAssistant";
+import AdminAnalyses from "@/views/AdminAnalyses";
 import Profile from "@/views/Profile";
 import ResetPassword from "@/views/ResetPassword";
 
@@ -40,6 +42,9 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/checklist-items" component={AdminChecklistItems} />
+      <Route path="/admin/analyses" component={AdminAnalyses} />
+      <Route path="/admin/ai-assistant" component={AdminAiAssistant} />
+      <Route path="/profile/ai-assistant" component={AdminAiAssistant} />
       <Route path="/profile" component={Profile} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { hasDuplicateGitUrlProtocols, sanitizeGitRepositoryUrlInput } from "@/lib/gitRepositoryUrl";
 
 
@@ -59,6 +60,8 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ApplicationDetail() {
 
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [, params] = useRoute("/applications/:id");
 
@@ -595,6 +598,14 @@ export default function ApplicationDetail() {
                       {new Date(analysis.startedAt).toLocaleDateString("pt-BR")}
 
                       {analysis.completedAt && ` — concluída em ${new Date(analysis.completedAt).toLocaleDateString("pt-BR")}`}
+
+                      {"executorEmail" in analysis && analysis.executorEmail && (
+                        <> · por {analysis.executorEmail}</>
+                      )}
+
+                      {"aiModelDisplay" in analysis && analysis.aiModelDisplay !== "Não configurado" && (
+                        <> · IA: {analysis.aiModelDisplay}</>
+                      )}
 
                     </p>
 

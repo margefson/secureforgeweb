@@ -5,7 +5,7 @@
 **Data:** 15/06/2026  
 **Versão do documento:** 1.0
 
-> **Documento histórico.** Para o **estado atual implementado** do sistema (Entrega 2, 16/06/2026), consulte [RELATORIO_ENTREGA_2.md](./RELATORIO_ENTREGA_2.md), [MANUAL.md](./MANUAL.md) e [DEMO.md](./DEMO.md).
+> **Documento histórico (Entrega 1).** Para o **estado atual** (Entrega 3, 30/06/2026), consulte [RELATORIO_ENTREGA_3.md](./RELATORIO_ENTREGA_3.md), [MANUAL.md](./MANUAL.md) e [DEMO.md](./DEMO.md). Entrega 2: [RELATORIO_ENTREGA_2.md](./RELATORIO_ENTREGA_2.md).
 
 ---
 

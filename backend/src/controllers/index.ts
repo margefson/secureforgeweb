@@ -6,6 +6,7 @@ import { systemRouter } from "../_core/systemRouter.js";
 import {
   authRouter,
   adminRouter,
+  aiAssistantRouter,
   notificationsRouter,
   applicationsRouter,
   checklistRouter,
@@ -18,6 +19,7 @@ export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   admin: adminRouter,
+  aiAssistant: aiAssistantRouter,
   notifications: notificationsRouter,
   applications: applicationsRouter,
   checklist: checklistRouter,

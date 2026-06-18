@@ -6,6 +6,7 @@ import type { TrpcContext } from "../_core/context.js";
 vi.mock("../models/applications.db.js", () => ({
   createApplication: vi.fn(),
   getApplicationsByUser: vi.fn(),
+  getAllApplicationsWithOwner: vi.fn(),
   getApplicationById: vi.fn(),
   updateApplication: vi.fn(),
   deleteApplication: vi.fn(),
@@ -16,9 +17,20 @@ vi.mock("../models/analyses.db.js", () => ({
   createAnalysis: vi.fn(),
   getAnalysisById: vi.fn(),
   getAnalysesByApplication: vi.fn(),
+  getAnalysesEnrichedByApplication: vi.fn(),
+  getAllAnalysesForAdmin: vi.fn(),
   getAnalysisWizardState: vi.fn(),
   saveAnalysisResponses: vi.fn(),
   completeAnalysis: vi.fn(),
+}));
+
+vi.mock("../models/assessmentRuns.db.js", () => ({
+  recordAssessmentRun: vi.fn(),
+}));
+
+vi.mock("../models/analysisItemEvidence.db.js", () => ({
+  upsertAnalysisItemEvidence: vi.fn(),
+  getItemEvidenceByAnalysis: vi.fn(),
 }));
 
 vi.mock("../services/checklistAssessor.js", () => ({
@@ -53,6 +65,7 @@ import * as analysesDb from "../models/analyses.db.js";
 import * as checklistAssessor from "../services/checklistAssessor.js";
 import * as gitRepoAssessor from "../services/gitRepoAssessor.js";
 import * as aiChecklistAssessor from "../services/aiChecklistAssessor.js";
+import * as analysisItemEvidenceDb from "../models/analysisItemEvidence.db.js";
 
 const mockUser = {
   id: 10,
@@ -141,6 +154,7 @@ const mockWizardState = {
     },
   ],
   responses: {},
+  itemEvidence: [],
   progress: { totalItems: 1, answeredItems: 0, percentComplete: 0 },
 };
 
@@ -252,7 +266,14 @@ describe("analyses router", () => {
 
   it("listByApplication retorna análises da aplicação", async () => {
     vi.mocked(applicationsDb.getApplicationById).mockResolvedValue(mockApp);
-    vi.mocked(analysesDb.getAnalysesByApplication).mockResolvedValue([mockAnalysis]);
+    vi.mocked(analysesDb.getAnalysesEnrichedByApplication).mockResolvedValue([
+      {
+        ...mockAnalysis,
+        executorName: "Test User",
+        executorEmail: "user@test.com",
+        assessmentRuns: [],
+      },
+    ]);
     const caller = appRouter.createCaller(makeCtx(mockUser));
     const result = await caller.analyses.listByApplication({ applicationId: 1 });
     expect(result).toHaveLength(1);
@@ -291,6 +312,11 @@ describe("analyses router", () => {
     const result = await caller.analyses.runAutoAssessment({ analysisId: 5, scope: "http_headers" });
     expect(result.suggestions).toHaveLength(1);
     expect(result.assessedUrl).toBe("https://app.test.com");
+    expect(analysisItemEvidenceDb.upsertAnalysisItemEvidence).toHaveBeenCalledWith(
+      5,
+      "http_headers",
+      result.suggestions
+    );
   });
 
   it("runAutoAssessment exige URL base cadastrada", async () => {

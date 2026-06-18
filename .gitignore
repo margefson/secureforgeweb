@@ -10,6 +10,8 @@ build/
 
 # Environment variables
 .env
+# Runtime data (AI config with API keys)
+backend/data/
 .env.local
 .env.development.local
 .env.test.local

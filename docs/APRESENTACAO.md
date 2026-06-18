@@ -1,6 +1,9 @@
 # Apresentação — SecureForge Web
 
-Roteiro de slides para entrega final (Trilha 1 — AppHardener).
+Roteiro de slides para entrega acadêmica (Trilha 1 — AppHardener).  
+Alinhado à **Entrega 3** — fluxo principal consolidado.
+
+Demonstração ao vivo: [DEMO.md](DEMO.md) · Relatório: [RELATORIO_ENTREGA_3.md](RELATORIO_ENTREGA_3.md)
 
 ---
 
@@ -8,7 +11,8 @@ Roteiro de slides para entrega final (Trilha 1 — AppHardener).
 
 **SecureForge Web**  
 Diagnóstico e Hardening de Aplicações Web  
-Projeto Integrador · Segurança Aplicada · Trilha 1
+Projeto Integrador · Segurança Aplicada · Trilha 1 — AppHardener  
+**Entrega 3** — Fluxo principal consolidado
 
 ---
 
@@ -17,6 +21,7 @@ Projeto Integrador · Segurança Aplicada · Trilha 1
 - Equipes pequenas não possuem fluxo estruturado para revisar postura de segurança
 - Scanners automatizados geram ruído sem orientação à correção
 - Falta rastreabilidade entre checklist, achados e plano de ação
+- Dificuldade em comparar resultados entre analistas e ferramentas
 
 ---
 
@@ -25,7 +30,8 @@ Projeto Integrador · Segurança Aplicada · Trilha 1
 Assistente guiado que conecta:
 
 ```
-Aplicação → Análise (checklist OWASP) → Achados → Recomendações → Dashboard → PDF
+Config IA pessoal → Aplicação → Checklist OWASP → Achados → Dashboard → PDF
+                              ↘ Admin: benchmark entre análises
 ```
 
 ---
@@ -39,7 +45,8 @@ Aplicação → Análise (checklist OWASP) → Achados → Recomendações → D
 | RF03–RF05 | Achados, severidade, recomendações |
 | RF06–RF07 | Dashboard + relatório PDF |
 | RF08 | Fluxo de status dos achados |
-| Extra | Análises automáticas assistidas (HTTP, Git, IA) |
+| Extra | Análises automáticas (HTTP, Git, IA) |
+| **E3** | IA por usuário + admin benchmark global |
 
 ---
 
@@ -47,9 +54,10 @@ Aplicação → Análise (checklist OWASP) → Achados → Recomendações → D
 
 - **Frontend:** React 19 + Vite + tRPC client
 - **Backend:** Express + tRPC + Drizzle ORM
-- **Banco:** PostgreSQL 16
-- **PDF:** PDFKit (Node.js)
-- **Assistente IA:** OpenAI API (opcional) + heurísticas locais
+- **Banco:** PostgreSQL 16 (migrações `0010`–`0016`)
+- **PDF:** PDFKit
+- **IA:** Config por usuário (`user_ai_assistant_configs`) — OpenAI, Gemini, Azure, custom
+- **Auditoria:** `analysis_assessment_runs` — registro de execuções automáticas
 
 ---
 
@@ -61,70 +69,110 @@ Autenticação · Autorização · Validação · Segredos · Headers · Exposi�
 
 ---
 
-## Slide 7 — Análises automáticas assistidas
+## Slide 7 — Assistente IA por usuário (Entrega 3)
 
-Três modalidades, executáveis **por categoria** ou **por item**:
+| Aspecto | Comportamento |
+|---|---|
+| Configuração | **Perfil → Configurar Assistente IA** |
+| Isolamento | Cada usuário com provedor/modelo/chave próprios |
+| Provedores | OpenAI, Gemini, Azure OpenAI, compatível OpenAI |
+| Modos | LLM (com chave) ou heurístico local (fallback) |
+| Execução | Usa sempre a config do **usuário logado** |
+
+---
+
+## Slide 8 — Análises automáticas assistidas
+
+Três modalidades, **por categoria** ou **por item**:
 
 | Modalidade | Evidência |
 |---|---|
 | Headers HTTP | Fetch passivo da URL base |
 | Repositório Git | Clone + heurísticas de código |
-| Assistente IA | Contexto HTTP + Git + LLM/heurístico |
+| Assistente IA | Contexto HTTP + Git + LLM/heurístico do usuário |
 
 Princípio: a automação **sugere**, o analista **valida**.
 
 ---
 
-## Slide 8 — Fluxo de análise
+## Slide 9 — Fluxo de análise
 
-1. Cadastrar aplicação (URL e/ou repo Git)
-2. Wizard por categoria — análises automáticas opcionais
-3. Salvamento parcial e navegação livre entre categorias
-4. Conclusão gera achados automaticamente
-5. Revisar recomendações e atualizar status
+1. Configurar assistente IA no perfil (opcional)
+2. Cadastrar aplicação (URL e/ou repo Git)
+3. Wizard — análises automáticas por categoria/item
+4. Salvamento parcial e navegação livre
+5. Conclusão → achados automáticos
+6. Dashboard + exportar PDF
 
 ---
 
-## Slide 9 — Dashboard de postura
+## Slide 10 — Dashboard de postura
 
 - **Score:** % itens conformes + N/A
-- **Gráficos:** severidade e categoria
-- **Taxa de resolução:** achados resolvidos / total
-- **Histórico:** múltiplas análises por aplicação
-- **PDF:** exportável em múltiplas telas
+- **Gráficos:** severidade e categoria (Recharts)
+- **Taxa de resolução**
+- **Histórico** de análises
+- **PDF** exportável
 
 ---
 
-## Slide 10 — Relatório PDF
+## Slide 11 — Admin: análises globais e benchmark (Entrega 3)
+
+- Visão de **todas as análises** de **todos os usuários**
+- Coluna **Modelo IA** (ex.: GPT-4o mini vs Gemini)
+- Filtros por coluna · colunas redimensionáveis
+- Seleção múltipla → **gráfico comparativo de postura**
+- Benchmark automático por mesma URL base
+
+Rota: `/admin/analyses`
+
+---
+
+## Slide 12 — Relatório PDF
 
 - Identificação da aplicação
-- Resumo executivo
-- Plano de ação priorizado por severidade
-- Recomendações de hardening
+- Resumo executivo (score, achados, resolução)
+- Plano de ação priorizado
+- Tema claro padronizado
 
 ---
 
-## Slide 11 — Segurança da plataforma
+## Slide 13 — Segurança da plataforma
 
 - bcrypt (12 rounds) · JWT HttpOnly · Rate limiting
 - CORS + Helmet · Proteção IDOR (404)
-- Timing attack prevention · Validação Joi
+- RBAC · Isolamento de dados por usuário
+- Config de IA armazenada por usuário no PostgreSQL
 
 ---
 
-## Slide 12 — Demo ao vivo
+## Slide 14 — Evolução Entrega 2 → 3
 
-Seguir roteiro em [DEMO.md](DEMO.md) — Portal Acadêmico Lab (~15 min)
-
-Destaques: análise Git + assistente IA por categoria + revisão humana + PDF
+| Entrega 2 | Entrega 3 |
+|---|---|
+| Base estrutural mínima | **Núcleo funcional consolidado** |
+| IA global (`.env`) | **IA por usuário** |
+| Admin básico | **Benchmark global** |
+| — | Registro de execuções automáticas |
 
 ---
 
-## Slide 13 — Conclusão
+## Slide 15 — Demo ao vivo
 
-- Protótipo demonstrável ponta a ponta
-- Checklist OWASP + achados + dashboard + PDF + análises assistidas
-- Evolução futura: integração CI/CD, repositórios privados, persistência de metadados IA
+Seguir [DEMO.md](DEMO.md) — Portal Acadêmico Lab (~18–22 min)
+
+**Destaques:** config IA no perfil · wizard · achados · PDF · admin comparativo
+
+**Cenário multiusuário:** dois operadores, modelos diferentes, admin compara gráfico.
+
+---
+
+## Slide 16 — Conclusão
+
+- Fluxo principal **funcional ponta a ponta**
+- Multiusuário com IA personalizada
+- Governança admin e benchmark visual
+- Próximos passos: vídeo demo, CI/CD, metadados IA no banco, entrega final
 
 **Repositório:** https://github.com/margefson/secureforgeweb
 
@@ -133,5 +181,5 @@ Destaques: análise Git + assistente IA por categoria + revisão humana + PDF
 ## Gravação de vídeo demo (opcional)
 
 1. Gravar tela seguindo [DEMO.md](DEMO.md)
-2. Duração alvo: 8–15 minutos
-3. Narração: problema → solução → análises automáticas → achados → dashboard → PDF
+2. Duração alvo: 12–20 minutos (incluir benchmark admin se possível)
+3. Narração: problema → solução → config IA → análises → achados → PDF → comparativo admin
